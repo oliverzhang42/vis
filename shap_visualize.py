@@ -1,3 +1,4 @@
+import keras
 from keras.applications.vgg16 import VGG16
 from keras.applications.vgg16 import preprocess_input
 import keras.backend as K
@@ -8,7 +9,7 @@ import shap
 import pudb; pudb.set_trace()
 
 # load pre-trained model and choose two images to explain
-model = VGG16(weights='imagenet', include_top=True)
+model = keras.models.load_model("vgg")#VGG16(weights='imagenet', include_top=True)
 X,y = shap.datasets.imagenet50()
 to_explain = X[[39,41]]
 

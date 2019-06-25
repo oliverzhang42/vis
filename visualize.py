@@ -30,15 +30,17 @@ model = load_model(args.model)
 
 # Load the image
 img = utils.load_img(args.image, target_size=model.input_shape[1:3])
+image = utils.load_img(args.image, target_size=model.input_shape[1:3])
 
 # Preprocess???
-
+img = img / 255
+img = img - np.mean(img)
 
 # Make predictions (will be used later)
 pred = model.predict(np.array([img]))[0]
 
 if args.shap:
-    img = np.array([img])
+    img = np.array([img]).astype('float32')
 
     def map2layer(x, layer):
         feed_dict = dict(zip([model.layers[0].input], [x.copy()]))
@@ -51,12 +53,10 @@ if args.shap:
     )
     shap_values,indexes = e.shap_values(map2layer(img, 15), ranked_outputs=1)
 
-    # get the names for the classes
-    index_names = "hi"
-
     # plot the explanations
-    shap.image_plot(shap_values, img, index_names)
+    shap.image_plot(shap_values, img)
 else:
+
     # Swap softmax with linear
     model.layers[-1].activation = activations.linear
     model = utils.apply_modifications(model)
@@ -65,7 +65,7 @@ else:
 
     #'''
     # Get visualization of last layer
-    layer_idx = -1
+    layer_idx = -2
     visualizations = []
     neurons = model.layers[layer_idx].output_shape[1]
 
@@ -91,7 +91,7 @@ else:
 
     for i in range(neurons):
         ax[i, 0].set_title("probability: {}".format(pred[i]))
-        ax[i, 0].imshow(img)
+        ax[i, 0].imshow(image)
         ax[i, 1].set_title("neuron: {}".format(i))
         ax[i, 1].imshow(visualizations[i], cmap='jet')
 
