@@ -1,98 +1,65 @@
+# TODO: Do I want to add preprocessing?
+# TODO: Do I want to add SHAP?
+
 import argparse
 from keras import activations
 from keras.models import load_model
-import keras.backend as K
 import matplotlib.cm as cm
 from matplotlib import pyplot as plt
 import numpy as np
-import shap
 from vis.utils import utils
 from vis.visualization import visualize_saliency, overlay, visualize_cam
 plt.rcParams['figure.figsize'] = (15, 10)
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--model', type=str, help='path of keras model')
-parser.add_argument('--image', type=str, help='path of image')
-parser.add_argument('--backprop', type=str, default='standard', help='relu, standard, or guided')
-parser.add_argument('--cam', type=bool, default=False, help='if you want it to use CAM')
-parser.add_argument('--shap', type=bool, default=False, help='if you want to use SHAP')
+parser.add_argument('--unprocessed_img', type=str, help='path of raw image.')
+parser.add_argument('--preprocessed_img', type=str, help='path of image. Must be npy file and preprocessed.')
+parser.add_argument('--vis', type=str, default='saliency', help='either CAM or saliency')
 
 args = parser.parse_args()
 
-assert args.backprop in ['relu', 'standard', 'guided']
-
-import pudb; pudb.set_trace()
-
-# ======================================================
+assert args.vis in ['cam', 'saliency'], "vis must either be cam or saliency!"
 
 # Load the model
 model = load_model(args.model)
 
 # Load the image
-img = utils.load_img(args.image, target_size=model.input_shape[1:3])
-image = utils.load_img(args.image, target_size=model.input_shape[1:3])
-
-# Preprocess???
-img = img / 255
-img = img - np.mean(img)
+img = utils.load_img(args.preprocessed_img, target_size=model.input_shape[1:3])
+unprocessed_img = utils.load_img(args.unprocessed_img, target_size=model.input_shape[1:3])
 
 # Make predictions (will be used later)
 pred = model.predict(np.array([img]))[0]
 
-if args.shap:
-    img = np.array([img]).astype('float32')
+# Swap softmax with linear
+model.layers[-1].activation = activations.linear
+model = utils.apply_modifications(model)
 
-    def map2layer(x, layer):
-        feed_dict = dict(zip([model.layers[0].input], [x.copy()]))
-        return K.get_session().run(model.layers[layer].input, feed_dict)
+# Get visualization of last layer
+layer_idx = -1
+visualizations = []
+neurons = model.layers[layer_idx].output_shape[1]
 
-    e = shap.GradientExplainer(
-        (model.layers[15].input, model.layers[-1].output),
-        map2layer(img, 15),
-        local_smoothing=0  # std dev of smoothing noise
-    )
-    shap_values,indexes = e.shap_values(map2layer(img, 15), ranked_outputs=1)
+# For each output option, visualize which inputs effect it.
+for i in range(neurons):
+    if args.vis == 'cam':#TODO: Don't hardcode penultimate layer
+        grads = visualize_cam(model, layer_idx, filter_indices=i,
+                              seed_input=img, penultimate_layer_idx=-4,
+                              backprop_modifier=None)
+        # Lets overlay the heatmap onto original image.
+        jet_heatmap = np.uint8(cm.jet(grads)[..., :3] * 255)
+        visualizations.append(overlay(jet_heatmap, unprocessed_img, alpha=0.5))
+    else: # TODO: Fix having to use image for overlay
+        visualizations.append(visualize_saliency(model, layer_idx, backprop_modifier='guided',
+                                                 filter_indices=i, seed_input=img))
 
-    # plot the explanations
-    shap.image_plot(shap_values, img)
-else:
+# Plot the visualizations for each output option.
+f, ax = plt.subplots(2, neurons)
 
-    # Swap softmax with linear
-    model.layers[-1].activation = activations.linear
-    model = utils.apply_modifications(model)
+for i in range(neurons):
+    ax[i, 0].set_title("probability: {}".format(pred[i], '4f'))
+    ax[i, 0].imshow(unprocessed_img)
+    ax[i, 1].set_title("neuron: {}".format(i))
+    ax[i, 1].imshow(visualizations[i], cmap='jet')
 
-    # ======================================================
-
-    #'''
-    # Get visualization of last layer
-    layer_idx = -2
-    visualizations = []
-    neurons = model.layers[layer_idx].output_shape[1]
-
-    #'''
-    for i in range(neurons):
-        if args.cam:
-            grads = visualize_cam(model, layer_idx, filter_indices=i,
-                                  seed_input=img, penultimate_layer_idx=None,
-                                  backprop_modifier=None)
-            # Lets overlay the heatmap onto original image.
-            jet_heatmap = np.uint8(cm.jet(grads)[..., :3] * 255)
-            visualizations.append(overlay(jet_heatmap, img))
-        else:
-            if args.backprop == 'standard':
-                args.backprop = None
-            visualizations.append(visualize_saliency(model, layer_idx, backprop_modifier=args.backprop,
-                                                     filter_indices=i, seed_input=img))
-    #'''
-
-    # Plot the layers
-
-    f, ax = plt.subplots(2, neurons)
-
-    for i in range(neurons):
-        ax[i, 0].set_title("probability: {}".format(pred[i]))
-        ax[i, 0].imshow(image)
-        ax[i, 1].set_title("neuron: {}".format(i))
-        ax[i, 1].imshow(visualizations[i], cmap='jet')
-
-    plt.show()
+plt.show()
