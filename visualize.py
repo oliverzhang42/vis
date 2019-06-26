@@ -16,17 +16,20 @@ parser.add_argument('--model', type=str, help='path of keras model')
 parser.add_argument('--unprocessed_img', type=str, help='path of raw image.')
 parser.add_argument('--preprocessed_img', type=str, help='path of image. Must be npy file and preprocessed.')
 parser.add_argument('--vis', type=str, default='saliency', help='either CAM or saliency')
+parser.add_argument('--penultimate_layer', type=int, default=-1,
+                    help='Used for CAM. Index of second to last layer which is a Conv or '
+                         'MaxPooling but not a Global Average Pooling')
 
 args = parser.parse_args()
 
 assert args.vis in ['cam', 'saliency'], "vis must either be cam or saliency!"
 
+# Load the image
+img = np.load(args.preprocessed_img)
+unprocessed_img = utils.load_img(args.unprocessed_img)
+
 # Load the model
 model = load_model(args.model)
-
-# Load the image
-img = utils.load_img(args.preprocessed_img, target_size=model.input_shape[1:3])
-unprocessed_img = utils.load_img(args.unprocessed_img, target_size=model.input_shape[1:3])
 
 # Make predictions (will be used later)
 pred = model.predict(np.array([img]))[0]
@@ -42,14 +45,14 @@ neurons = model.layers[layer_idx].output_shape[1]
 
 # For each output option, visualize which inputs effect it.
 for i in range(neurons):
-    if args.vis == 'cam':#TODO: Don't hardcode penultimate layer
+    if args.vis == 'cam':
         grads = visualize_cam(model, layer_idx, filter_indices=i,
-                              seed_input=img, penultimate_layer_idx=-4,
+                              seed_input=img, penultimate_layer_idx=args.penultimate_layer,
                               backprop_modifier=None)
         # Lets overlay the heatmap onto original image.
         jet_heatmap = np.uint8(cm.jet(grads)[..., :3] * 255)
         visualizations.append(overlay(jet_heatmap, unprocessed_img, alpha=0.5))
-    else: # TODO: Fix having to use image for overlay
+    else:
         visualizations.append(visualize_saliency(model, layer_idx, backprop_modifier='guided',
                                                  filter_indices=i, seed_input=img))
 
@@ -57,7 +60,7 @@ for i in range(neurons):
 f, ax = plt.subplots(2, neurons)
 
 for i in range(neurons):
-    ax[i, 0].set_title("probability: {}".format(pred[i], '4f'))
+    ax[i, 0].set_title("probability: %.3f" % pred[i])
     ax[i, 0].imshow(unprocessed_img)
     ax[i, 1].set_title("neuron: {}".format(i))
     ax[i, 1].imshow(visualizations[i], cmap='jet')
