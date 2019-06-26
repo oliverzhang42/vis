@@ -16,9 +16,8 @@ parser.add_argument('--model', type=str, help='path of keras model')
 parser.add_argument('--unprocessed_img', type=str, help='path of raw image.')
 parser.add_argument('--preprocessed_img', type=str, help='path of image. Must be npy file and preprocessed.')
 parser.add_argument('--vis', type=str, default='saliency', help='either CAM or saliency')
-parser.add_argument('--penultimate_layer', type=int, default=-1,
-                    help='Used for CAM. Index of second to last layer which is a Conv or '
-                         'MaxPooling but not a Global Average Pooling')
+parser.add_argument('--conv_layer', type=int, default=None,
+                    help='Used for CAM. Index of last convolutional layer')
 
 args = parser.parse_args()
 
@@ -47,7 +46,7 @@ neurons = model.layers[layer_idx].output_shape[1]
 for i in range(neurons):
     if args.vis == 'cam':
         grads = visualize_cam(model, layer_idx, filter_indices=i,
-                              seed_input=img, penultimate_layer_idx=args.penultimate_layer,
+                              seed_input=img, penultimate_layer_idx=args.conv_layer,
                               backprop_modifier=None)
         # Lets overlay the heatmap onto original image.
         jet_heatmap = np.uint8(cm.jet(grads)[..., :3] * 255)
