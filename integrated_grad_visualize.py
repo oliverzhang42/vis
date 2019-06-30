@@ -115,14 +115,15 @@ attributions = integrated_gradients(
     steps=50
 )
 
+grad = attributions[0]
+
+
 #normalize the integrated_grads
-
-normalized = attributions[0] / (np.max(attributions[0]) - np.min(attributions[0]))
+normalized = grad / (np.max(grad) - np.min(grad))
 #normalized = normalized - np.min(normalized)
+#normalized = 1-normalized
+#combined = unprocessed * 0.5 + normalized * 0.5
 
-normalized = 1-normalized
-
-combined = unprocessed * 0.5 + normalized * 0.5
-
-plt.imshow(combined)
+# Figure out the UI in the future I guess...
+plt.imshow(normalized)
 plt.show()
