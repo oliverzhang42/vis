@@ -13,15 +13,14 @@ from vis.visualization import visualize_saliency, overlay, visualize_cam
 from keras import backend as K
 import shap
 
+plt.rcParams['figure.figsize'] = (15, 7)
 
-def visualize(img, unprocessed_img, vis, name, conv_layer=None, background=None, show=False):
+def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, background=None, show=False, title=None):
     batch = np.array([img])
 
-    # Load the model
-    model = load_model(args.model)
-    
     # Make predictions (will be used later)
     pred = model.predict(np.array([img]))[0]
+    neuron = np.argmax(pred)
     
     # Swap softmax with linear
     model.layers[-1].activation = activations.linear
@@ -29,23 +28,15 @@ def visualize(img, unprocessed_img, vis, name, conv_layer=None, background=None,
     
     # Get visualization of last layer
     layer_idx = -1
-    visualizations = []
-    neurons = model.layers[layer_idx].output_shape[1]
-    
+
     # For each output option, visualize which inputs effect it.
-    
     if vis == 'cam':
-        for i in range(neurons):
-            grads = visualize_cam(model, layer_idx, filter_indices=i,
-                                  seed_input=img, penultimate_layer_idx=conv_layer,
-                                  backprop_modifier=None)
-            # Lets overlay the heatmap onto original image.
-            jet_heatmap = np.uint8(cm.jet(grads)[..., :3] * 255)
-            visualizations.append(overlay(jet_heatmap, unprocessed_img, alpha=0.5))
+        visualization = visualize_cam(model, layer_idx, filter_indices=neuron,
+                              seed_input=img, penultimate_layer_idx=conv_layer,
+                              backprop_modifier=None)
     elif vis == 'saliency':
-        for i in range(neurons):
-            visualizations.append(visualize_saliency(model, layer_idx, backprop_modifier='guided',
-                                                     filter_indices=i, seed_input=img))
+        visualization = visualize_saliency(model, layer_idx, backprop_modifier='guided',
+                                                 filter_indices=neuron, seed_input=img)
     elif vis == 'shap':
         # select a set of background examples to take an expectation over
         # NOTE: Not sure what background image to use, an expectation or a white image.
@@ -58,55 +49,67 @@ def visualize(img, unprocessed_img, vis, name, conv_layer=None, background=None,
         e = shap.DeepExplainer(model, background)
     
         shap_values = e.shap_values(batch)
-    
-        shap_values[0] = shap_values[0][0].astype('float32')
-        shap_values[1] = shap_values[1][0].astype('float32')
-    
+
+        for i in range(len(shap_values)):
+            shap_values[i] = shap_values[i][0].astype('float32')
+
         # normalize the arrays
         # shap_values = np.clip(shap_values, 0, np.max(shap_values))
         shap_values = np.max(shap_values, -1)
     
         # plot the feature attributions
-        visualizations = shap_values
+        visualization = shap_values[neuron]
     
     elif vis == 'integrated_grad':
-        for i in range(neurons):
-            assert 'background' in vars(), "Integrated Gradients uses a background image"
+        assert 'background' in vars(), "Integrated Gradients uses a background image"
 
-            def get_pred_and_grad(input, class_index):
-                input = np.array(input)
-                pred = model.predict(input)
-                fn = K.function([model.input], K.gradients(model.output[:, class_index], model.input))
+        def get_pred_and_grad(input, class_index):
+            input = np.array(input)
+            pred = model.predict(input)
+            fn = K.function([model.input], K.gradients(model.output[:, class_index], model.input))
     
-                grad = fn([input])[0]
+            grad = fn([input])[0]
     
-                return pred, grad
+            return pred, grad
     
-            attributions = integrated_gradients(
-                img,
-                i,
-                get_pred_and_grad,
-                baseline=background,
-                steps=50
-            )
+        attributions = integrated_gradients(
+            img,
+            neuron,
+            get_pred_and_grad,
+            baseline=background,
+            steps=50
+        )
     
-            grad = attributions[0]
+        grad = attributions[0]
     
-            # removing all negative gradients
-            grad = np.clip(grad, np.min(grad)/2, np.max(grad)/2)
-            grad = np.max(grad, -1)
+        # removing all negative gradients
+        grad = np.clip(grad, np.min(grad)/2, np.max(grad)/2)
+        grad = np.max(grad, -1)
     
-            visualizations.append(grad)
+        visualization = grad
 
     # Plot the visualizations for each output option.
-    f, ax = plt.subplots(2, neurons)
+    f, ax = plt.subplots(1, 3)
+
+    if title:
+        f.suptitle(title)
+
+    # Normalize the visualization to the 0-255 range
+    normalized = visualization - np.min(visualization)
+    normalized = normalized / np.max(normalized)
     
-    for i in range(neurons):
-        ax[i, 0].set_title("Neuron {} activation: %.6f".format(i) % pred[i])
-        ax[i, 0].imshow(unprocessed_img)
-        ax[i, 1].set_title("Importance map for neuron {}:".format(i))
-        heatmap = ax[i, 1].imshow(visualizations[i])
-        f.colorbar(heatmap, ax=ax[i, 1])
+    # Lets overlay the heatmap onto original image.
+    viridis_heatmap = np.uint8(cm.viridis(normalized)[..., :3] * 255)
+    overlayed = overlay(viridis_heatmap, unprocessed_img, alpha=0.5)
+
+    ax[0].set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
+    ax[0].imshow(unprocessed_img)
+    ax[1].set_title("Importance map for neuron {}:".format(neuron))
+    heatmap = ax[1].imshow(visualization, cmap='viridis')
+    f.colorbar(heatmap, ax=ax[1], cmap='viridis')
+    ax[2].set_title("Overlayed Image")
+    overlayed_subplot = ax[2].imshow(overlayed)
+    f.colorbar(overlayed_subplot, ax=ax[2], cmap='viridis')
 
     print("Saving Figure to {}_explained_{}.png".format(name, vis))
     plt.savefig('{}_explained_{}.png'.format(name, vis))
@@ -116,8 +119,6 @@ def visualize(img, unprocessed_img, vis, name, conv_layer=None, background=None,
 
 
 if __name__ == '__main__':
-    plt.rcParams['figure.figsize'] = (15, 10)
-
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, help='path of keras model')
     parser.add_argument('--unprocessed_img', type=str, help='path of raw image.')
@@ -145,5 +146,8 @@ if __name__ == '__main__':
     else:
         background = None
 
-    visualize(preprocessed_img, unprocessed_img, args.vis, args.unprocessed_img[:-4],
+    # Load the model
+    model = load_model(args.model)
+
+    visualize(model, preprocessed_img, unprocessed_img, args.vis, args.unprocessed_img[:-4],
               conv_layer=args.conv_layer, background=background, show=args.show)
