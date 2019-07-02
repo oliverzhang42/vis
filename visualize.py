@@ -15,12 +15,14 @@ import shap
 
 plt.rcParams['figure.figsize'] = (15, 7)
 
-def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, background=None, show=False, title=None):
+
+def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, background=None, show=False, title=None, sensitivity=2, neuron=None):
     batch = np.array([img])
 
     # Make predictions (will be used later)
     pred = model.predict(np.array([img]))[0]
-    neuron = np.argmax(pred)
+    if neuron is None:
+        neuron = np.argmax(pred)
     
     # Swap softmax with linear
     model.layers[-1].activation = activations.linear
@@ -53,8 +55,8 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, backgroun
         for i in range(len(shap_values)):
             shap_values[i] = shap_values[i][0].astype('float32')
 
-        # normalize the arrays
-        # shap_values = np.clip(shap_values, 0, np.max(shap_values))
+        #
+        shap_values = np.clip(shap_values, np.min(shap_values)/sensitivity, np.max(shap_values)/sensitivity)
         shap_values = np.max(shap_values, -1)
     
         # plot the feature attributions
@@ -82,8 +84,8 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, backgroun
     
         grad = attributions[0]
     
-        # removing all negative gradients
-        grad = np.clip(grad, np.min(grad)/2, np.max(grad)/2)
+        #
+        grad = np.clip(grad, np.min(grad)/sensitivity, np.max(grad)/sensitivity)
         grad = np.max(grad, -1)
     
         visualization = grad
@@ -97,7 +99,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, backgroun
     # Normalize the visualization to the 0-255 range
     normalized = visualization - np.min(visualization)
     normalized = normalized / np.max(normalized)
-    
+
     # Lets overlay the heatmap onto original image.
     viridis_heatmap = np.uint8(cm.viridis(normalized)[..., :3] * 255)
     overlayed = overlay(viridis_heatmap, unprocessed_img, alpha=0.5)
@@ -128,6 +130,10 @@ if __name__ == '__main__':
                         help='Used for CAM. Index of last convolutional layer')
     parser.add_argument('--background', type=str, help='path of "background" image')
     parser.add_argument('--show', type=bool, default=False, help='whether to display the image')
+    parser.add_argument('--sensitivity', type=int, default=2, help='Used for shap or integrated_grad. '
+                                                                   'Sensitvity of display.')
+    parser.add_argument('--neuron', type=int, default=None, help='Which neuron to visualize. If blank, will visualize '
+                                                                 'the neuron with highest activation')
     # TODO: There seems to be a bug with show always showing.
 
     args = parser.parse_args()
@@ -150,4 +156,5 @@ if __name__ == '__main__':
     model = load_model(args.model)
 
     visualize(model, preprocessed_img, unprocessed_img, args.vis, args.unprocessed_img[:-4],
-              conv_layer=args.conv_layer, background=background, show=args.show)
+              conv_layer=args.conv_layer, background=background, show=args.show, sensitivity=args.sensitivity,
+              neuron=args.neuron)
