@@ -13,6 +13,75 @@ from vis.visualization import visualize_saliency, overlay, visualize_cam
 plt.rcParams['figure.figsize'] = (15, 7)
 
 
+def visualize_integrated_gradients(model, img, background, sensitivity, neuron):
+    # Define a function, given an input and a class index
+    # It returns the predictions of your model and the gradients.
+    # Such a function is required for the integrated_gradients framework.
+    def get_pred_and_grad(input, class_index):
+        input = np.array(input)
+        pred = model.predict(input)
+        fn = K.function([model.input],
+                        K.gradients(model.output[:, class_index], model.input))
+
+        grad = fn([input])[0]
+
+        return pred, grad
+
+    attributions = integrated_gradients(
+        img,
+        neuron,
+        get_pred_and_grad,
+        baseline=background,
+        steps=50
+    )
+
+    visualization = attributions[0]
+
+    # Clip shap_values between min/sensitivity and max/sensitivity
+    # Prevents outliers from overshadowing the importances of all other pixels.
+    # The higher the sensitivity, the more pixels are at the upper bound, the
+    # more lit up the image seems.
+    visualization = np.clip(visualization, np.min(visualization) / sensitivity,
+                                           np.max(visualization) / sensitivity)
+
+    # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
+    # This is because a 3D importance map is hard to interpret compared to a 2D one.
+    visualization = np.max(visualization, -1)
+
+    return visualization
+
+
+def visualize_shap(model, img, background, sensitivity, neuron):
+    batch = np.array([img])
+
+    # Background needs to be an array of 3D images.
+    if len(background.shape) == 3:
+        background = np.array([background])
+
+    # explain predictions of the model on four images
+    e = shap.DeepExplainer(model, background)
+    shap_values = e.shap_values(batch)
+
+    # Convert all shap_values to 'float32'
+    for i in range(len(shap_values)):
+        shap_values[i] = shap_values[i][0].astype('float32')
+
+    # Clip shap_values between min/sensitivity and max/sensitivity
+    # Prevents outliers from overshadowing the importances of all other pixels.
+    # The higher the sensitivity, the more pixels are at the upper bound, the
+    # more lit up the image seems.
+    shap_values = np.clip(shap_values, np.min(shap_values) / sensitivity,
+                                       np.max(shap_values) / sensitivity)
+
+    # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
+    # This is because a 3D importance map is hard to interpret compared to a 2D one.
+    shap_values = np.max(shap_values, -1)
+
+    # plot the feature attributions
+    visualization = shap_values[neuron]
+
+    return visualization
+
 # TODO: Is name necessary??
 def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
               background=None, show=False, title=None, sensitivity=2,
@@ -64,71 +133,21 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
         # Get visualization of last layer
         layer_idx = -1
 
-        visualization = visualize_saliency(model, layer_idx, backprop_modifier='guided',
-                                                 filter_indices=neuron, seed_input=img)
+        visualization = visualize_saliency(model, layer_idx,
+                                           backprop_modifier='guided',
+                                           filter_indices=neuron,
+                                           seed_input=img)
     elif vis == 'shap':
-        batch = np.array([img])
+        assert background is not None, "Shap requires a background image."
 
-        # Make sure the variable "background" exists.
-        assert 'background' in vars(), "Shap uses a background image"
-        # Background needs to be an array of 3D images.
-        if len(background.shape) == 3:
-            background = np.array([background])
-    
-        # explain predictions of the model on four images
-        e = shap.DeepExplainer(model, background)
-        shap_values = e.shap_values(batch)
-
-        # Convert all shap_values to 'float32'
-        for i in range(len(shap_values)):
-            shap_values[i] = shap_values[i][0].astype('float32')
-
-        # Clip shap_values between min/sensitivity and max/sensitivity
-        # We do this to prevent outliers from overshadowing the importances of all other pixels.
-        # The higher the sensitivity, the more pixels are at the upper bound, the more lit up the image seems.
-        shap_values = np.clip(shap_values, np.min(shap_values)/sensitivity, np.max(shap_values)/sensitivity)
-
-        # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
-        # This is because a 3D importance map is hard to interpret compared to a 2D one.
-        shap_values = np.max(shap_values, -1)
-    
-        # plot the feature attributions
-        visualization = shap_values[neuron]
+        visualization = visualize_shap(model, img, background,
+                                       sensitivity, neuron)
     
     elif vis == 'integrated_grad':
-        # Make sure the variable "background" exists
-        assert 'background' in vars(), "Integrated Gradients uses a background image"
+        assert background is not None, "Integrated Gradients requires a background"
 
-        # Define a function, given an input and a class index
-        # It returns the predictions of your model and the gradients.
-        # Such a function is required for the integrated_gradients framework.
-        def get_pred_and_grad(input, class_index):
-            input = np.array(input)
-            pred = model.predict(input)
-            fn = K.function([model.input], K.gradients(model.output[:, class_index], model.input))
-    
-            grad = fn([input])[0]
-    
-            return pred, grad
-    
-        attributions = integrated_gradients(
-            img,
-            neuron,
-            get_pred_and_grad,
-            baseline=background,
-            steps=50
-        )
-    
-        visualization = attributions[0]
-    
-        # Clip shap_values between min/sensitivity and max/sensitivity
-        # We do this to prevent outliers from overshadowing the importances of all other pixels.
-        # The higher the sensitivity, the more pixels are at the upper bound, the more lit up the image seems
-        visualization = np.clip(visualization, np.min(visualization)/sensitivity, np.max(visualization)/sensitivity)
-
-        # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
-        # This is because a 3D importance map is hard to interpret compared to a 2D one.
-        visualization = np.max(visualization, -1)
+        visualization = visualize_integrated_gradients(model, img, background,
+                                                       sensitivity, neuron)
 
     # Plot the visualizations for each output option.
     f, ax = plt.subplots(1, 3)
@@ -169,16 +188,22 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, help='path of keras model')
     parser.add_argument('--unprocessed_img', type=str, help='path of raw image.')
-    parser.add_argument('--preprocessed_img', type=str, help='path of image. Must be npy file and preprocessed.')
-    parser.add_argument('--vis', type=str, default='saliency', help='either CAM or saliency')
+    parser.add_argument('--preprocessed_img', type=str,
+                        help='path of image. Must be npy file and preprocessed.')
+    parser.add_argument('--vis', type=str, default='cam',
+                        help='either cam, shap, integrated_grad, or saliency')
     parser.add_argument('--conv_layer', type=int, default=None,
                         help='Used for CAM. Index of last convolutional layer')
-    parser.add_argument('--background', type=str, help='path of "background" image')
-    parser.add_argument('--show', type=bool, default=False, help='whether to display the image')
-    parser.add_argument('--sensitivity', type=int, default=2, help='Used for shap or integrated_grad. '
-                                                                   'Sensitvity of display.')
-    parser.add_argument('--neuron', type=int, default=None, help='Which neuron to visualize. If blank, will visualize '
-                                                                 'the neuron with highest activation')
+    parser.add_argument('--background', type=str,
+                        help='path of "background" image')
+    parser.add_argument('--show', type=bool, default=False,
+                        help='whether to display the image')
+    parser.add_argument('--sensitivity', type=int, default=2,
+                        help='Used for shap or integrated_grad. '
+                             'Sensitvity of display.')
+    parser.add_argument('--neuron', type=int, default=None,
+                        help='Which neuron to visualize. If blank, will '
+                             'visualize the neuron with highest activation')
     # TODO: There seems to be a bug with show always showing.
 
     args = parser.parse_args()
@@ -200,6 +225,7 @@ if __name__ == '__main__':
     # Load the model
     model = load_model(args.model)
 
-    visualize(model, preprocessed_img, unprocessed_img, args.vis, args.unprocessed_img[:-4],
-              conv_layer=args.conv_layer, background=background, show=args.show, sensitivity=args.sensitivity,
+    visualize(model, preprocessed_img, unprocessed_img, args.vis,
+              args.unprocessed_img[:-4], conv_layer=args.conv_layer,
+              background=background, show=args.show, sensitivity=args.sensitivity,
               neuron=args.neuron)
