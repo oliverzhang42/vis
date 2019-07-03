@@ -1,70 +1,107 @@
-# TODO: Make sensitivity an argument
-
 import argparse
 from keras import activations
+from keras import backend as K
 from keras.models import load_model
-from integrated_grad_visualize import integrated_gradients
+from integrated_gradients import integrated_gradients
 import matplotlib.cm as cm
 from matplotlib import pyplot as plt
 import numpy as np
+import shap
 from vis.utils import utils
 from vis.visualization import visualize_saliency, overlay, visualize_cam
-
-from keras import backend as K
-import shap
 
 plt.rcParams['figure.figsize'] = (15, 7)
 
 
-def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, background=None, show=False, title=None, sensitivity=2, neuron=None):
-    batch = np.array([img])
+# TODO: Is name necessary??
+def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
+              background=None, show=False, title=None, sensitivity=2,
+              neuron=None):
+    '''
+    Visualizes the predictions of a model on a certain image.
+
+    :param model: (keras model) The model which you want to explain
+    :param img: (numpy array) The image the model makes predictions on. Must
+    be preprocessed.
+    :param unprocessed_img: (numpy array) img but unprocessed. Values either
+    ints from 0-255 or floats from 0-1. Will be displayed.
+    :param vis: (str) Either "cam", "saliency", "shap" or "integrated_grad".
+    The visualization technique
+    :param name: (str) The name to save the visualization under
+    :param conv_layer: (int) Required if using CAM; the last convolutional
+    layer of the model
+    :param background: (numpy array) Must be preprocesesd. The "background"
+    image for shap or integrated_grad.
+    See README for more details.
+    :param show: (bool) Whether to display the visualization or just save it.
+    :param title: (str) Title of the visualization.
+    :param sensitivity: (int) Used with "shap" or "integrated_grad". Sensitivity
+    of the visualization.
+    Should be between 1-10. %TODO: Should I get rid of sensitivity?
+    :param neuron: (int) Which neuron to display. If unset, will display the
+    neuron with highest activation.
+    :return:
+    '''
 
     # Make predictions (will be used later)
     pred = model.predict(np.array([img]))[0]
     if neuron is None:
         neuron = np.argmax(pred)
     
-    # Swap softmax with linear
+    # Swap softmax with linear. Makes gradients more visible
     model.layers[-1].activation = activations.linear
     model = utils.apply_modifications(model)
-    
-    # Get visualization of last layer
-    layer_idx = -1
 
     # For each output option, visualize which inputs effect it.
     if vis == 'cam':
+        # Get visualization of last layer
+        layer_idx = -1
+
         visualization = visualize_cam(model, layer_idx, filter_indices=neuron,
                               seed_input=img, penultimate_layer_idx=conv_layer,
                               backprop_modifier=None)
     elif vis == 'saliency':
+        # Get visualization of last layer
+        layer_idx = -1
+
         visualization = visualize_saliency(model, layer_idx, backprop_modifier='guided',
                                                  filter_indices=neuron, seed_input=img)
     elif vis == 'shap':
-        # select a set of background examples to take an expectation over
-        # NOTE: Not sure what background image to use, an expectation or a white image.
-        # Trying white image for now.
+        batch = np.array([img])
+
+        # Make sure the variable "background" exists.
         assert 'background' in vars(), "Shap uses a background image"
+        # Background needs to be an array of 3D images.
         if len(background.shape) == 3:
             background = np.array([background])
     
         # explain predictions of the model on four images
         e = shap.DeepExplainer(model, background)
-    
         shap_values = e.shap_values(batch)
 
+        # Convert all shap_values to 'float32'
         for i in range(len(shap_values)):
             shap_values[i] = shap_values[i][0].astype('float32')
 
-        #
+        # Clip shap_values between min/sensitivity and max/sensitivity
+        # We do this to prevent outliers from overshadowing the importances of all other pixels.
+        # The higher the sensitivity, the more pixels are at the upper bound, the more lit up the image seems.
         shap_values = np.clip(shap_values, np.min(shap_values)/sensitivity, np.max(shap_values)/sensitivity)
+
+        # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
+        # This is because a 3D importance map is hard to interpret compared to a 2D one.
         shap_values = np.max(shap_values, -1)
     
         # plot the feature attributions
         visualization = shap_values[neuron]
     
     elif vis == 'integrated_grad':
+        # Make sure the variable "background" exists
         assert 'background' in vars(), "Integrated Gradients uses a background image"
 
+        # Define a function, given an input and a class index
+        # It returns the predictions of your model and the gradients.
+        # Such a function is required for the integrated_gradients framework.
         def get_pred_and_grad(input, class_index):
             input = np.array(input)
             pred = model.predict(input)
@@ -82,13 +119,16 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, backgroun
             steps=50
         )
     
-        grad = attributions[0]
+        visualization = attributions[0]
     
-        #
-        grad = np.clip(grad, np.min(grad)/sensitivity, np.max(grad)/sensitivity)
-        grad = np.max(grad, -1)
-    
-        visualization = grad
+        # Clip shap_values between min/sensitivity and max/sensitivity
+        # We do this to prevent outliers from overshadowing the importances of all other pixels.
+        # The higher the sensitivity, the more pixels are at the upper bound, the more lit up the image seems
+        visualization = np.clip(visualization, np.min(visualization)/sensitivity, np.max(visualization)/sensitivity)
+
+        # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
+        # This is because a 3D importance map is hard to interpret compared to a 2D one.
+        visualization = np.max(visualization, -1)
 
     # Plot the visualizations for each output option.
     f, ax = plt.subplots(1, 3)
@@ -102,16 +142,21 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None, backgroun
 
     # Lets overlay the heatmap onto original image.
     viridis_heatmap = np.uint8(cm.viridis(normalized)[..., :3] * 255)
-    overlayed = overlay(viridis_heatmap, unprocessed_img, alpha=0.5)
+    overlaid = overlay(viridis_heatmap, unprocessed_img, alpha=0.5)
 
+    # First Subplot
     ax[0].set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
     ax[0].imshow(unprocessed_img)
+
+    # Second subplot
     ax[1].set_title("Importance map for neuron {}:".format(neuron))
     heatmap = ax[1].imshow(visualization, cmap='viridis')
     f.colorbar(heatmap, ax=ax[1], cmap='viridis')
-    ax[2].set_title("Overlayed Image")
-    overlayed_subplot = ax[2].imshow(overlayed)
-    f.colorbar(overlayed_subplot, ax=ax[2], cmap='viridis')
+
+    # Third subplot
+    ax[2].set_title("Overlaid Image")
+    overlaid_subplot = ax[2].imshow(overlaid)
+    f.colorbar(overlaid_subplot, ax=ax[2], cmap='viridis')
 
     print("Saving Figure to {}_explained_{}.png".format(name, vis))
     plt.savefig('{}_explained_{}.png'.format(name, vis))

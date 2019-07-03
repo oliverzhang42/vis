@@ -1,3 +1,7 @@
+# https://github.com/ankurtaly/Integrated-Gradients/blob/master/IntegratedGradients/integrated_gradients.py
+
+import numpy as np
+
 def integrated_gradients(
         inp,
         target_label_index,
@@ -80,50 +84,3 @@ def integrated_gradients(
     avg_grads = np.average(grads[:-1], axis=0)
     integrated_gradients = (inp - baseline) * avg_grads  # shape: <inp.shape>
     return integrated_gradients, predictions
-
-
-import numpy as np
-import keras
-from keras import backend as K
-import matplotlib.pyplot as plt
-
-model = keras.models.load_model("resnet_ppg")
-
-unprocessed = plt.imread("adversarial.jpg") / 255
-image = np.load("adversarial_preprocessed.npy")
-
-baseline = np.ones((224, 224, 3))
-
-index = 0
-
-import pudb; pudb.set_trace()
-
-def get_pred_and_grad(input, class_index):
-    input = np.array(input)
-    pred = model.predict(input)
-    fn = K.function([model.input], K.gradients(model.output[:, class_index], model.input))
-
-    grad = fn([input])[0]
-
-    return pred, grad
-
-attributions = integrated_gradients(
-    image,
-    index,
-    get_pred_and_grad,
-    baseline=baseline,
-    steps=50
-)
-
-grad = attributions[0]
-
-
-#normalize the integrated_grads
-normalized = grad / (np.max(grad) - np.min(grad))
-#normalized = normalized - np.min(normalized)
-#normalized = 1-normalized
-#combined = unprocessed * 0.5 + normalized * 0.5
-
-# Figure out the UI in the future I guess...
-plt.imshow(normalized)
-plt.show()
