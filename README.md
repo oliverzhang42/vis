@@ -8,18 +8,32 @@ Currently the tools accepts 5 arguments.
 --unprocessed_img (str): path to unprocessed img (jpg or png)
 --preprocessed_img (str): path to preprocessed img (Must be .npy file)
 --vis (str): Either 'cam' (heatmap), 'shap', 'integrated_grad', or 'saliency' 
---conv_layer (int): Optional argument, used if you chose 'cam'. The index of the last conv2d layer in the model.
---background (str): Optional argument, used if you chose 'integrated_grad' or 'shap'. Path to the "background image"
+--conv_layer (int): Optional argument, used if you chose 'cam'. The index of the
+                    last conv2d layer in the model.
+--background (str): Optional argument, used if you chose 'integrated_grad' or 
+                    'shap'. Path to the "background image"
+--show (bool): Whether to show the image or just save it.
+--sensitivity (int): Optional argument, used for 'shap' or 'integrated_grad'. A 
+                     number between 1 to 10, the higher it is, the more gradients
+                     are visible.
+--neuron (int): Which neuron in the last layer to visualize. If left blank, the 
+                code will visualize the neuron (in the last layer) with the 
+                highest activation.
 ```
 
 #### Notes on arguments:
-```--conv_layer``` only comes into play if your last pooling
+```--conv_layer``` only comes into play if you're using cam and your last pooling
 layer is GlobalAveragPooling. This is the case for ResNet but not VGG.
 
-```--background``` only is necessary for shap or integrated_grad. Basically, these methods require
-a base image to compare against. This 'base image' should be an image which the model is uncertain about.
-(For resnet_ppg, a white image is a bad background because the model is confident that the PPG is bad.) 
-Also note that the background image must be preprocessed like all other images.
+```--background``` only is necessary for shap or integrated_grad. Basically, 
+these methods require a base image to compare against. This 'base image' should 
+be an image which the model is uncertain about. (For resnet_ppg, a white image 
+is a bad background because the model is confident that the PPG is bad.) Also 
+note that the background image must be preprocessed like all other images.
+
+```--sensitivity``` works because often one or two pixel gradients outweight the
+rest. By clipping the image to 1/sensitivity * max_pixel_value, we can force more
+gradients to be displayed.
 
 ### How it works
 
@@ -43,13 +57,14 @@ CAM is implemented by keras-vis and comes from the papers:
 
 Shap is implemented by the shap library and comes from the papers:
 
-(Note: Shap is actually a unified framework of different visualization methods. I'm actually using DeepLIFT, 
-a small part of the framework)
+(Note: Shap is actually a unified framework of different visualization methods. 
+I'm actually using DeepLIFT, a small part of the framework)
 
 1. https://arxiv.org/abs/1704.02685 (DeepLIFT, the subsection of shap that is used)
 2. https://arxiv.org/abs/1705.07874 (general shap)
 
-integrated_grad is implemented by the Integrated-Gradients library and comes from the paper:
+integrated_grad is implemented by the Integrated-Gradients library and comes 
+from the paper:
 
 1. https://arxiv.org/abs/1703.01365
 

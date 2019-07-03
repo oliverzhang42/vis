@@ -1,3 +1,10 @@
+# TODO:
+# To make this work for Conv1D, I need to:
+# 1. Verify that visualize_cam/visualize_saliency/ etc. works for 1D models
+# 2. Either add an argument for 2d vs 1d or automatically detect it somehow.
+# (then also add a print statement acknowledging whether 2D or 1D)
+# 3. Have two different display functions which display a 2D or 1D image.
+
 import argparse
 from keras import activations
 from keras import backend as K
