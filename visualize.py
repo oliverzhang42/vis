@@ -20,6 +20,10 @@ from vis.visualization import visualize_saliency, overlay, visualize_cam
 plt.rcParams['figure.figsize'] = (15, 7)
 
 
+def rgb2gray(rgb):
+    return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
+
+
 def visualize_integrated_gradients(model, img, background, sensitivity, neuron):
     # Define a function, given an input and a class index
     # It returns the predictions of your model and the gradients.
@@ -44,12 +48,11 @@ def visualize_integrated_gradients(model, img, background, sensitivity, neuron):
 
     visualization = attributions[0]
 
-    # Clip shap_values between min/sensitivity and max/sensitivity
+    # Clip shap_values between 0 and max/sensitivity
     # Prevents outliers from overshadowing the importances of all other pixels.
     # The higher the sensitivity, the more pixels are at the upper bound, the
     # more lit up the image seems.
-    visualization = np.clip(visualization, np.min(visualization) / sensitivity,
-                                           np.max(visualization) / sensitivity)
+    visualization = np.clip(visualization, 0, np.max(visualization) / sensitivity)
 
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
@@ -73,12 +76,11 @@ def visualize_shap(model, img, background, sensitivity, neuron):
     for i in range(len(shap_values)):
         shap_values[i] = shap_values[i][0].astype('float32')
 
-    # Clip shap_values between min/sensitivity and max/sensitivity
+    # Clip shap_values between 0 and max/sensitivity
     # Prevents outliers from overshadowing the importances of all other pixels.
     # The higher the sensitivity, the more pixels are at the upper bound, the
     # more lit up the image seems.
-    shap_values = np.clip(shap_values, np.min(shap_values) / sensitivity,
-                                       np.max(shap_values) / sensitivity)
+    shap_values = np.clip(shap_values, 0, np.max(shap_values) / sensitivity)
 
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
@@ -130,6 +132,9 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
 
     # For each output option, visualize which inputs effect it.
     if vis == 'cam':
+        if conv_layer is None:
+            print("Warning! If your model is Resnet or has a global average pooling"
+                  "layer, conv_layer shouldn't be None or else CAM won't work!")
         # Get visualization of last layer
         layer_idx = -1
 
@@ -162,13 +167,39 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     if title:
         f.suptitle(title)
 
-    # Normalize the visualization to the 0-255 range
+    import pudb; pudb.set_trace()
+
+    # Normalize the visualization to the 0-1 range
     normalized = visualization - np.min(visualization)
     normalized = normalized / np.max(normalized)
 
+    # Grayscale the unprocessed image
+    gray_img = rgb2gray(unprocessed_img) / 255
+    gray_img = np.expand_dims(gray_img, 2)
+
+    # Convert the gray_img into a three channeled image again
+    gray_img = np.concatenate((gray_img, gray_img, gray_img), 2)
+    gray_img = np.uint8(gray_img * 255)
+
+    # Make the gray image even more faint
+    if vis != 'cam':
+        for i in range(len(gray_img)):
+            for j in range(len(gray_img[0])):
+                if gray_img[i][j][0] < 235:
+                    gray_img[i][j][0] = 235
+                    gray_img[i][j][1] = 235
+                    gray_img[i][j][2] = 235
+
     # Lets overlay the heatmap onto original image.
-    viridis_heatmap = np.uint8(cm.viridis(normalized)[..., :3] * 255)
-    overlaid = overlay(viridis_heatmap, unprocessed_img, alpha=0.5)
+    if vis == 'cam':
+        colored_heatmap = np.uint8(cm.jet(normalized)[..., :3] * 255)
+    else:
+        colored_heatmap = np.uint8(cm.Reds(normalized)[..., :3] * 255)
+
+    if vis == 'cam':
+        overlaid = overlay(colored_heatmap, gray_img, alpha=0.3)
+    else:
+        overlaid = np.minimum(colored_heatmap, gray_img)
 
     # First Subplot
     ax[0].set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
@@ -176,13 +207,16 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
 
     # Second subplot
     ax[1].set_title("Importance map for neuron {}:".format(neuron))
-    heatmap = ax[1].imshow(visualization, cmap='viridis')
-    f.colorbar(heatmap, ax=ax[1], cmap='viridis')
+    if vis == 'cam':
+        heatmap = ax[1].imshow(visualization, cmap='jet')
+    else:
+        heatmap = ax[1].imshow(visualization, cmap='Reds')
+    f.colorbar(heatmap, ax=ax[1])
 
     # Third subplot
     ax[2].set_title("Overlaid Image")
-    overlaid_subplot = ax[2].imshow(overlaid)
-    f.colorbar(overlaid_subplot, ax=ax[2], cmap='viridis')
+    ax[2].imshow(overlaid)
+    f.colorbar(heatmap, ax=ax[2])
 
     print("Saving Figure to {}_explained_{}.png".format(name, vis))
     plt.savefig('{}_explained_{}.png'.format(name, vis))
