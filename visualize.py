@@ -1,12 +1,3 @@
-# TODO:
-# To make this work for Conv1D, I need to:
-# 1. Verify that visualize_cam/visualize_saliency/ etc. works for 1D models (done)
-# 2. Either add an argument for 2d vs 1d or automatically detect it somehow.
-# (then also add a print statement acknowledging whether 2D or 1D)
-# 3. Have two different display functions which display a 2D or 1D image.
-
-# Change preprocessed_img and unprocessed_img to preprocessed_data/unprocessed_data?
-
 import argparse
 from keras import activations
 from keras import backend as K
@@ -98,83 +89,52 @@ def visualize_shap(model, img, background, clip, neuron):
 
     return visualization
 
-# TODO: Is name necessary??
-def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
-              background=None, show=False, title=None, clip=2, contrast=3,
-              neuron=None):
+
+def display_2d(visualization, img, neuron, pred, title):
     '''
-    Visualizes the predictions of a model on a certain image.
+    Displays a multi-colored line which is actually many uniformly colored
+    small line segments.
 
-    :param model: (keras model) The model which you want to explain
-    :param img: (numpy array) The image the model makes predictions on. Must
-    be preprocessed.
-    :param unprocessed_img: (numpy array) img but unprocessed. Values either
-    ints from 0-255 or floats from 0-1. Will be displayed.
-    :param vis: (str) Either "cam", "saliency", "shap" or "integrated_grad".
-    The visualization technique
-    :param name: (str) The name to save the visualization under
-    :param conv_layer: (int) Required if using CAM; the last convolutional
-    layer of the model
-    :param background: (numpy array) Must be preprocesesd. The "background"
-    image for shap or integrated_grad.
-    See README for more details.
-    :param show: (bool) Whether to display the visualization or just save it.
-    :param title: (str) Title of the visualization.
-    :param clip: (int) Used with "shap" or "integrated_grad". Clip larger gradients
-    to max/clip, so smaller gradients are also displayed.
-    Should be between 1-10.
-    :param contrast: (float) Used with "shap" or "integrated_grad". Determines
-    how much should smaller gradients show. (Higher contrast = smaller gradients
-    show more.)
-    :param neuron: (int) Which neuron to display. If unset, will display the
-    neuron with highest activation.
-    :return:
+    Based off of this tutorial:
+    https://matplotlib.org/gallery/lines_bars_and_markers/multicolored_line.html
     '''
+    f, ax = plt.subplots()
 
-    # Dimension
-    dim = len(model.input.shape) - 1
+    if title:
+        f.suptitle(title)
 
-    # Make predictions (will be used later)
-    pred = model.predict(np.array([img]))[0]
-    if neuron is None:
-        neuron = np.argmax(pred)
-    
-    # Swap softmax with linear. Makes gradients more visible
-    model.layers[-1].activation = activations.linear
-    model = utils.apply_modifications(model)
+    y = img
+    x = [[i] for i in range(len(y))]
 
-    # For each output option, visualize which inputs effect it.
-    if vis == 'cam':
-        if conv_layer is None:
-            print("Warning! If your model is Resnet or has a global average pooling"
-                  "layer, conv_layer shouldn't be None or else CAM won't work!")
-        # Get visualization of last layer
-        layer_idx = -1
+    # We have points in a (7201, 1, 2) shape. In general, we have (num points, 1, 2)
+    points = np.concatenate((x, y), 1)
+    points = np.expand_dims(points, 1)
 
-        visualization = visualize_cam(model, layer_idx, filter_indices=neuron,
-                              seed_input=img, penultimate_layer_idx=conv_layer,
-                              backprop_modifier=None)
-    elif vis == 'saliency':
-        # Get visualization of last layer
-        layer_idx = -1
+    # We turn these points into an array of line segments with shape (7201, 2, 2)
+    # segments[0], for example, might be ([2, 3], [4, 5]) which is the line from (2,3) to (4,5)
+    segments = np.concatenate((points[:-1], points[1:]), 1)
 
-        visualization = visualize_saliency(model, layer_idx,
-                                           backprop_modifier='guided',
-                                           filter_indices=neuron,
-                                           seed_input=img)
-    elif vis == 'shap':
-        assert background is not None, "Shap requires a background image."
+    norm = plt.Normalize(visualization.min(), visualization.max())
+    lc = matplotlib.collections.LineCollection(segments, cmap='viridis', norm=norm)
 
-        visualization = visualize_shap(model, img, background,
-                                       clip, neuron)
-    
-    elif vis == 'integrated_grad':
-        assert background is not None, "Integrated Gradients requires a background"
+    # This determines the colorings
+    lc.set_array(visualization)
+    lc.set_linewidth(2)
 
-        visualization = visualize_integrated_gradients(model, img, background,
-                                                       clip, neuron)
+    ax.set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
 
-    # Plot the visualizations for each output option.
+    heatmap = ax.add_collection(lc)
+    ax.set_xlim(np.min(x), np.max(x))
+    f.colorbar(heatmap, ax=ax)
+
+
+def display_3d(visualization, unprocessed_img, neuron, pred, title, vis, contrast):
+    '''
+    First grayscales and fades the unprocessed_img
+    Second converts "visualization" into a displayable image. Overlays \
+    visualization on the unprocessed_img
+    Third displays everything.
+    '''
     f, ax = plt.subplots(1, 3)
 
     if title:
@@ -191,7 +151,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     gray_img = np.concatenate((gray_img, gray_img, gray_img), 2)
     gray_img = np.uint8(gray_img)
 
-    # Make the gray image even more faint
+    # Make the gray image even more faint (Fade the image even more)
     if vis != 'cam':
         for i in range(len(gray_img)):
             for j in range(len(gray_img[0])):
@@ -231,7 +191,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     if vis == 'cam':
         heatmap = ax[1].imshow(visualization, cmap='jet')
     else:
-        heatmap = ax[1].imshow(visualization, cmap='Reds')
+        heatmap = ax[1].imshow(visualization, cmap=newcmp)
     f.colorbar(heatmap, ax=ax[1])
 
     # Third subplot
@@ -239,9 +199,93 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     ax[2].imshow(overlaid)
     f.colorbar(heatmap, ax=ax[2])
 
+
+# TODO: Is name necessary??
+def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
+              background=None, show=False, title=None, clip=2, contrast=2,
+              neuron=None):
+    '''
+    Visualizes the predictions of a model on a certain image.
+
+    :param model: (keras model) The model which you want to explain
+    :param img: (numpy array) The image the model makes predictions on. Must
+    be preprocessed.
+    :param unprocessed_img: (numpy array) img but unprocessed. Values either
+    ints from 0-255 or floats from 0-1. Will be displayed.
+    :param vis: (str) Either "cam", "saliency", "shap" or "integrated_grad".
+    The visualization technique
+    :param name: (str) The name to save the visualization under
+    :param conv_layer: (int) Required if using CAM; the last convolutional
+    layer of the model
+    :param background: (numpy array) Must be preprocesesd. The "background"
+    image for shap or integrated_grad.
+    See README for more details.
+    :param show: (bool) Whether to display the visualization or just save it.
+    :param title: (str) Title of the visualization.
+    :param clip: (int) Used with "shap" or "integrated_grad". Clip larger gradients
+    to max/clip, so smaller gradients are also displayed.
+    Should be between 1-10.
+    :param contrast: (float) Used with "shap" or "integrated_grad". Determines
+    how much should smaller gradients show. (Higher contrast = smaller gradients
+    show more.)
+    :param neuron: (int) Which neuron to display. If unset, will display the
+    neuron with highest activation.
+    :return:
+    '''
+
+    # Dimension
+    dim = len(model.input.shape) - 1
+
+    # Make predictions (will be used later)
+    pred = model.predict(np.array([img]))[0]
+    if neuron is None:
+        neuron = np.argmax(pred)
+
+    # Swap softmax with linear. Makes gradients more visible
+    model.layers[-1].activation = activations.linear
+    model = utils.apply_modifications(model)
+
+    # For each output option, visualize which inputs effect it.
+    if vis == 'cam':
+        if conv_layer is None:
+            print("Warning! If your model is Resnet or has a global average pooling"
+                  "layer, conv_layer shouldn't be None or else CAM won't work!")
+        # Get visualization of last layer
+        layer_idx = -1
+
+        visualization = visualize_cam(model, layer_idx, filter_indices=neuron,
+                              seed_input=img, penultimate_layer_idx=conv_layer,
+                              backprop_modifier=None)
+    elif vis == 'saliency':
+        # Get visualization of last layer
+        layer_idx = -1
+
+        visualization = visualize_saliency(model, layer_idx,
+                                           backprop_modifier='guided',
+                                           filter_indices=neuron,
+                                           seed_input=img)
+    elif vis == 'shap':
+        assert background is not None, "Shap requires a background image."
+
+        visualization = visualize_shap(model, img, background,
+                                       clip, neuron)
+
+    elif vis == 'integrated_grad':
+        assert background is not None, "Integrated Gradients requires a background"
+
+        visualization = visualize_integrated_gradients(model, img, background,
+                                                       clip, neuron)
+
+    if dim == 2:
+        display_2d(visualization, img, neuron, pred, title)
+    elif dim == 3:
+        display_3d(visualization, unprocessed_img, neuron, pred, title, vis, contrast)
+    else:
+        raise Exception("Cannot display a model which isn't 2D or 3D!")
+
     print("Saving Figure to {}_explained_{}.png".format(name, vis))
     plt.savefig('{}_explained_{}.png'.format(name, vis))
-    
+
     if show:
         plt.show()
 
@@ -263,7 +307,7 @@ if __name__ == '__main__':
     parser.add_argument('--clip', type=int, default=2,
                         help='Used for shap or integrated_grad. '
                              'Sensitvity of display.')
-    parser.add_argument('--contrast', type=int, default=3,
+    parser.add_argument('--contrast', type=float, default=2,
                         help='Used for shap or integrated_grad. '
                              'How much smaller gradients are emphasized.')
     parser.add_argument('--neuron', type=int, default=None,
