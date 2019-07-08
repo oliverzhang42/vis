@@ -1,16 +1,18 @@
 # TODO:
 # To make this work for Conv1D, I need to:
-# 1. Verify that visualize_cam/visualize_saliency/ etc. works for 1D models
+# 1. Verify that visualize_cam/visualize_saliency/ etc. works for 1D models (done)
 # 2. Either add an argument for 2d vs 1d or automatically detect it somehow.
 # (then also add a print statement acknowledging whether 2D or 1D)
 # 3. Have two different display functions which display a 2D or 1D image.
+
+# Change preprocessed_img and unprocessed_img to preprocessed_data/unprocessed_data?
 
 import argparse
 from keras import activations
 from keras import backend as K
 from keras.models import load_model
 from integrated_gradients import integrated_gradients
-import matplotlib.cm as cm
+import matplotlib
 from matplotlib import pyplot as plt
 import numpy as np
 import shap
@@ -20,11 +22,19 @@ from vis.visualization import visualize_saliency, overlay, visualize_cam
 plt.rcParams['figure.figsize'] = (15, 7)
 
 
+def normalize(x):
+    '''Noramlize array x to 0-1'''
+    normalized = x - np.min(x)
+    normalized = normalized / np.max(normalized)
+    return normalized
+
+
 def rgb2gray(rgb):
+    '''Converts (n,m,3) rgb image to (n,m) grayscale image'''
     return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
 
 
-def visualize_integrated_gradients(model, img, background, sensitivity, neuron):
+def visualize_integrated_gradients(model, img, background, clip, neuron):
     # Define a function, given an input and a class index
     # It returns the predictions of your model and the gradients.
     # Such a function is required for the integrated_gradients framework.
@@ -48,11 +58,11 @@ def visualize_integrated_gradients(model, img, background, sensitivity, neuron):
 
     visualization = attributions[0]
 
-    # Clip shap_values between 0 and max/sensitivity
+    # Clip shap_values between 0 and max/clip
     # Prevents outliers from overshadowing the importances of all other pixels.
-    # The higher the sensitivity, the more pixels are at the upper bound, the
+    # The higher the clip, the more pixels are at the upper bound, the
     # more lit up the image seems.
-    visualization = np.clip(visualization, 0, np.max(visualization) / sensitivity)
+    visualization = np.clip(visualization, 0, np.max(visualization) / clip)
 
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
@@ -61,12 +71,9 @@ def visualize_integrated_gradients(model, img, background, sensitivity, neuron):
     return visualization
 
 
-def visualize_shap(model, img, background, sensitivity, neuron):
+def visualize_shap(model, img, background, clip, neuron):
     batch = np.array([img])
-
-    # Background needs to be an array of 3D images.
-    if len(background.shape) == 3:
-        background = np.array([background])
+    background = np.array([background])
 
     # explain predictions of the model on four images
     e = shap.DeepExplainer(model, background)
@@ -76,11 +83,11 @@ def visualize_shap(model, img, background, sensitivity, neuron):
     for i in range(len(shap_values)):
         shap_values[i] = shap_values[i][0].astype('float32')
 
-    # Clip shap_values between 0 and max/sensitivity
+    # Clip shap_values between 0 and max/clip
     # Prevents outliers from overshadowing the importances of all other pixels.
-    # The higher the sensitivity, the more pixels are at the upper bound, the
+    # The higher the clip, the more pixels are at the upper bound, the
     # more lit up the image seems.
-    shap_values = np.clip(shap_values, 0, np.max(shap_values) / sensitivity)
+    shap_values = np.clip(shap_values, 0, np.max(shap_values) / clip)
 
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
@@ -93,7 +100,7 @@ def visualize_shap(model, img, background, sensitivity, neuron):
 
 # TODO: Is name necessary??
 def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
-              background=None, show=False, title=None, sensitivity=2,
+              background=None, show=False, title=None, clip=2, contrast=3,
               neuron=None):
     '''
     Visualizes the predictions of a model on a certain image.
@@ -113,13 +120,19 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     See README for more details.
     :param show: (bool) Whether to display the visualization or just save it.
     :param title: (str) Title of the visualization.
-    :param sensitivity: (int) Used with "shap" or "integrated_grad". Sensitivity
-    of the visualization.
-    Should be between 1-10. %TODO: Should I get rid of sensitivity?
+    :param clip: (int) Used with "shap" or "integrated_grad". Clip larger gradients
+    to max/clip, so smaller gradients are also displayed.
+    Should be between 1-10.
+    :param contrast: (float) Used with "shap" or "integrated_grad". Determines
+    how much should smaller gradients show. (Higher contrast = smaller gradients
+    show more.)
     :param neuron: (int) Which neuron to display. If unset, will display the
     neuron with highest activation.
     :return:
     '''
+
+    # Dimension
+    dim = len(model.input.shape) - 1
 
     # Make predictions (will be used later)
     pred = model.predict(np.array([img]))[0]
@@ -153,13 +166,13 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
         assert background is not None, "Shap requires a background image."
 
         visualization = visualize_shap(model, img, background,
-                                       sensitivity, neuron)
+                                       clip, neuron)
     
     elif vis == 'integrated_grad':
         assert background is not None, "Integrated Gradients requires a background"
 
         visualization = visualize_integrated_gradients(model, img, background,
-                                                       sensitivity, neuron)
+                                                       clip, neuron)
 
     # Plot the visualizations for each output option.
     f, ax = plt.subplots(1, 3)
@@ -167,19 +180,16 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     if title:
         f.suptitle(title)
 
-    import pudb; pudb.set_trace()
-
     # Normalize the visualization to the 0-1 range
-    normalized = visualization - np.min(visualization)
-    normalized = normalized / np.max(normalized)
+    normalized = normalize(visualization)
 
     # Grayscale the unprocessed image
-    gray_img = rgb2gray(unprocessed_img) / 255
+    gray_img = rgb2gray(unprocessed_img)
     gray_img = np.expand_dims(gray_img, 2)
 
     # Convert the gray_img into a three channeled image again
     gray_img = np.concatenate((gray_img, gray_img, gray_img), 2)
-    gray_img = np.uint8(gray_img * 255)
+    gray_img = np.uint8(gray_img)
 
     # Make the gray image even more faint
     if vis != 'cam':
@@ -190,12 +200,23 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
                     gray_img[i][j][1] = 235
                     gray_img[i][j][2] = 235
 
-    # Lets overlay the heatmap onto original image.
+    # Lets overlay the heatmap onto original image. CAM has its own colormap,
+    # All other techniques use a modified red colormap
     if vis == 'cam':
-        colored_heatmap = np.uint8(cm.jet(normalized)[..., :3] * 255)
+        colored_heatmap = np.uint8(matplotlib.cm.jet(normalized)[..., :3] * 255)
     else:
-        colored_heatmap = np.uint8(cm.Reds(normalized)[..., :3] * 255)
+        # Custom colormap to increase the visibility of the gradients
 
+        reds = matplotlib.cm.get_cmap('Reds', 256)
+        newcolors = reds(np.linspace(0, 1, 256))
+        newcolors[0, :] = 1
+        newcolors = newcolors ** contrast
+
+        newcmp = matplotlib.colors.ListedColormap(newcolors)
+
+        colored_heatmap = np.uint8(newcmp(normalized)[..., :3] * 255)
+
+    # Cam even has its own overlay technique.
     if vis == 'cam':
         overlaid = overlay(colored_heatmap, gray_img, alpha=0.3)
     else:
@@ -239,12 +260,16 @@ if __name__ == '__main__':
                         help='path of "background" image')
     parser.add_argument('--show', type=bool, default=False,
                         help='whether to display the image')
-    parser.add_argument('--sensitivity', type=int, default=2,
+    parser.add_argument('--clip', type=int, default=2,
                         help='Used for shap or integrated_grad. '
                              'Sensitvity of display.')
+    parser.add_argument('--contrast', type=int, default=3,
+                        help='Used for shap or integrated_grad. '
+                             'How much smaller gradients are emphasized.')
     parser.add_argument('--neuron', type=int, default=None,
                         help='Which neuron to visualize. If blank, will '
                              'visualize the neuron with highest activation')
+    # TODO: Make this a boolean once you figure out booleans
     # TODO: There seems to be a bug with show always showing.
 
     args = parser.parse_args()
@@ -252,9 +277,19 @@ if __name__ == '__main__':
     assert args.vis in ['cam', 'saliency', 'shap', 'integrated_grad'], \
         "vis must be cam, shap, integrated_grad or saliency!"
 
+    # Load the model
+    model = load_model(args.model)
+
+    dimension = len(model.input.shape) - 1
+
     # Load the image
-    preprocessed_img = np.load(args.preprocessed_img)
-    unprocessed_img = utils.load_img(args.unprocessed_img)
+
+    if dimension == 2:
+        preprocessed_img = np.load(args.preprocessed_img)
+        unprocessed_img = np.load(args.unprocessed_img)
+    else:
+        preprocessed_img = np.load(args.preprocessed_img)
+        unprocessed_img = utils.load_img(args.unprocessed_img)
 
     # Load the background if there is one
     # Note: Background must be preprocessed!
@@ -263,10 +298,7 @@ if __name__ == '__main__':
     else:
         background = None
 
-    # Load the model
-    model = load_model(args.model)
-
     visualize(model, preprocessed_img, unprocessed_img, args.vis,
               args.unprocessed_img[:-4], conv_layer=args.conv_layer,
-              background=background, show=args.show, sensitivity=args.sensitivity,
-              neuron=args.neuron)
+              background=background, show=args.show, clip=args.clip,
+              contrast=args.contrast, neuron=args.neuron)
