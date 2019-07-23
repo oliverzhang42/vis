@@ -268,7 +268,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     '''
 
     # Dimension
-    dim = len(model.input.shape) - 1
+    dim = len(model.input.shape) - 2
 
     # Make predictions (will be used later)
     pred = model.predict(np.array([img]))[0]
@@ -310,12 +310,12 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
         visualization = visualize_integrated_gradients(model, img, background,
                                                        clip, neuron)
 
-    if dim == 2:
+    if dim == 1:
         display_1d(visualization, img, neuron, pred, title)
-    elif dim == 3:
+    elif dim == 2:
         display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast)
     else:
-        raise Exception("Cannot display a model which isn't 2D or 3D!")
+        raise Exception("Cannot display a model which isn't 1D or 2D!")
 
     print("Saving Figure to {}_explained_{}.png".format(name, vis))
     plt.savefig('{}_explained_{}.png'.format(name, vis))
@@ -358,12 +358,12 @@ if __name__ == '__main__':
     # Load the model
     model = load_model(args.model)
 
-    dimension = len(model.input.shape) - 1
+    dimension = len(model.input.shape) - 2
     print("Model detected to have dimension {}".format(dimension))
 
     # Load the image
 
-    if dimension == 2:
+    if dimension == 1:
         preprocessed_img = np.load(args.preprocessed_img)
         unprocessed_img = np.load(args.unprocessed_img)
     else:
