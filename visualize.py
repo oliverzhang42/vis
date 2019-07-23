@@ -90,7 +90,7 @@ def visualize_shap(model, img, background, clip, neuron):
     return visualization
 
 
-def display_2d(visualization, img, neuron, pred, title):
+def display_1d(visualization, img, neuron, pred, title, vertical = []):
     '''
     Displays a multi-colored line which is actually many uniformly colored
     small line segments.
@@ -104,7 +104,11 @@ def display_2d(visualization, img, neuron, pred, title):
         f.suptitle(title)
 
     y = img
-    x = [[i] for i in range(len(y))]
+
+    # Afib specific
+    x = np.linspace(0, 30, 7201)
+    x = np.reshape(x, (7201, 1))
+    #x = [[i] for i in range(len(y))]
 
     # We have points in a (7201, 1, 2) shape. In general, we have (num points, 1, 2)
     points = np.concatenate((x, y), 1)
@@ -115,20 +119,50 @@ def display_2d(visualization, img, neuron, pred, title):
     segments = np.concatenate((points[:-1], points[1:]), 1)
 
     norm = plt.Normalize(visualization.min(), visualization.max())
-    lc = matplotlib.collections.LineCollection(segments, cmap='viridis', norm=norm)
+
+    # Custom colormap to increase the visibility of the gradients
+
+    reds = matplotlib.cm.get_cmap('Reds', 256)
+    newcolors = reds(np.linspace(0, 1, 256))
+    newcolors[0:25, :] = 0.8 #Set to a very light gray
+
+    newcmp = matplotlib.colors.ListedColormap(newcolors)
+
+    lc = matplotlib.collections.LineCollection(segments, cmap=newcmp, norm=norm)
 
     # This determines the colorings
     lc.set_array(visualization)
     lc.set_linewidth(2)
 
-    ax.set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
+    # Afib Specific
+    if neuron == 0:
+        ax.set_title("Probability of bad PPG signal: %.6f" % pred[neuron])
+    else:
+        ax.set_title("Probability of good PPG signal: %.6f" % pred[neuron])
+    #ax.set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
 
     heatmap = ax.add_collection(lc)
     ax.set_xlim(np.min(x), np.max(x))
-    f.colorbar(heatmap, ax=ax)
+    cbar = f.colorbar(heatmap, ax=ax)
+
+    # Afib specific
+    #plt.ylabel("Arbitrary Scaling of PPG")
+    #plt.xlabel("Time (seconds)")
+    #cbar.set_label("Arbitrary Scaling of Saliency")
+    #cbar.set_label("Shap Values")
+
+    # Afib specific, adding in the anotations
+    for x_pos in vertical:
+        plt.axvline(x=x_pos, color='black')
+    #plt.axvline(x=6.275, color='black')
+    #plt.axvline(x=7.488, color='black')
+    #plt.axvline(x=27.297, color='black')
+    #plt.axvline(x=28.247, color='black')
 
 
-def display_3d(visualization, unprocessed_img, neuron, pred, title, vis, contrast):
+
+
+def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast):
     '''
     First grayscales and fades the unprocessed_img
     Second converts "visualization" into a displayable image. Overlays \
@@ -155,10 +189,10 @@ def display_3d(visualization, unprocessed_img, neuron, pred, title, vis, contras
     if vis != 'cam':
         for i in range(len(gray_img)):
             for j in range(len(gray_img[0])):
-                if gray_img[i][j][0] < 235:
-                    gray_img[i][j][0] = 235
-                    gray_img[i][j][1] = 235
-                    gray_img[i][j][2] = 235
+                if gray_img[i][j][0] < 230:
+                    gray_img[i][j][0] = 230
+                    gray_img[i][j][1] = 230
+                    gray_img[i][j][2] = 230
 
     # Lets overlay the heatmap onto original image. CAM has its own colormap,
     # All other techniques use a modified red colormap
@@ -277,9 +311,9 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
                                                        clip, neuron)
 
     if dim == 2:
-        display_2d(visualization, img, neuron, pred, title)
+        display_1d(visualization, img, neuron, pred, title)
     elif dim == 3:
-        display_3d(visualization, unprocessed_img, neuron, pred, title, vis, contrast)
+        display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast)
     else:
         raise Exception("Cannot display a model which isn't 2D or 3D!")
 
@@ -325,6 +359,7 @@ if __name__ == '__main__':
     model = load_model(args.model)
 
     dimension = len(model.input.shape) - 1
+    print("Model detected to have dimension {}".format(dimension))
 
     # Load the image
 
