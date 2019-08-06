@@ -1,9 +1,9 @@
 ## Visualization Tool For Convolutional Neural Networks
 
-![alt text](https://github.com/oliverzhang42/vis/blob/master/images/testcase_0_explained_integrated_grad.png?raw=true)
+![alt text](https://github.com/oliverzhang42/vis/blob/master/saliency.png?raw=true)
 
 Above: Highlighted are the pixels which the resnet_ppg model associates with a 
-bad ppg.
+bad ppg. We use guided saliency as our visualization method.
 
 ### How to Use
 Currently the tools accepts 9 arguments. The tool can also display and visualize
