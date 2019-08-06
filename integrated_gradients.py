@@ -76,8 +76,6 @@ def integrated_gradients(
         baseline = 0 * inp
     assert (baseline.shape == inp.shape)
 
-    import pudb; pudb.set_trace()
-
     # Scale input and compute gradients.
     scaled_inputs = [baseline + (float(i) / steps) * (inp - baseline) for i in range(0, steps + 1)]
     predictions, grads = predictions_and_gradients(scaled_inputs,

@@ -53,7 +53,10 @@ def visualize_integrated_gradients(model, img, background, clip, neuron):
     # Prevents outliers from overshadowing the importances of all other pixels.
     # The higher the clip, the more pixels are at the upper bound, the
     # more lit up the image seems.
-    visualization = np.clip(visualization, 0, np.max(visualization) / clip)
+    
+    # TODO: maybe re add this?
+    # visualization = np.clip(visualization, 0, np.max(visualization) / 1)
+    visualization = np.abs(visualization)
 
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
@@ -78,7 +81,12 @@ def visualize_shap(model, img, background, clip, neuron):
     # Prevents outliers from overshadowing the importances of all other pixels.
     # The higher the clip, the more pixels are at the upper bound, the
     # more lit up the image seems.
-    shap_values = np.clip(shap_values, 0, np.max(shap_values) / clip)
+
+    #print("Instead of clipping, right now I'm just taking the abs value!")
+    
+    # TODO: maybe re add this?
+    #shap_values = np.abs(shap_values)
+    shap_values = np.clip(shap_values, 0, np.max(shap_values) / 1)
 
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
@@ -99,6 +107,11 @@ def display_1d(visualization, img, neuron, pred, title, vertical = []):
     https://matplotlib.org/gallery/lines_bars_and_markers/multicolored_line.html
     '''
     f, ax = plt.subplots()
+    
+    assert len(visualization) == len(img), "The visualization and the image must have the same length"
+
+    visualization = visualization.flatten()
+    img = np.reshape(img, (len(img), 1))
 
     if title:
         f.suptitle(title)
@@ -114,7 +127,7 @@ def display_1d(visualization, img, neuron, pred, title, vertical = []):
     points = np.concatenate((x, y), 1)
     points = np.expand_dims(points, 1)
 
-    # We turn these points into an array of line segments with shape (7201, 2, 2)
+    # We turn these points into an array of line segments with shape (7200, 2, 2)
     # segments[0], for example, might be ([2, 3], [4, 5]) which is the line from (2,3) to (4,5)
     segments = np.concatenate((points[:-1], points[1:]), 1)
 
@@ -162,7 +175,7 @@ def display_1d(visualization, img, neuron, pred, title, vertical = []):
 
 
 
-def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast):
+def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast=2):
     '''
     First grayscales and fades the unprocessed_img
     Second converts "visualization" into a displayable image. Overlays \
@@ -309,6 +322,9 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
 
         visualization = visualize_integrated_gradients(model, img, background,
                                                        clip, neuron)
+
+    plt.hist(visualization.flatten(), 50)
+    plt.show()
 
     if dim == 1:
         display_1d(visualization, img, neuron, pred, title)
