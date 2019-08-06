@@ -7,13 +7,13 @@ bad ppg. We use guided saliency as our visualization method.
 
 ### How to Use
 Currently the tools accepts 9 arguments. The tool can also display and visualize
-both 2D and 3D convolutional neural 
+both 1D and 2D convolutional neural 
 networks. 
 
 #### Required Arguments
 ```--model (str):``` path to neural network
-```--unprocessed_img(str):``` path to unprocessed image. (jpg)
-```--preprocessed_img (str):``` path to preprocessed img (Must be .npy file)
+```--unprocessed_img(str):``` path to unprocessed image. (jpg if 2d, npy if 1d)
+```--preprocessed_img (str):``` path to preprocessed img (Must be npy)
 ```--vis (str):``` Determines visualization type. Either 'cam' (heatmap), 
 'shap', 'integrated_grad', or 'saliency' 
 
@@ -73,11 +73,10 @@ CAM is implemented by keras-vis and comes from the papers:
 Shap is implemented by the shap library and comes from the papers:
 
 (Note: Shap is actually a unified framework of different visualization methods. 
-I'm actually using DeepLIFT, a small part of the framework)
+I'm actually using DeepSHAP, a small part of the framework adapted from DeepLIFT.)
 
-1. https://arxiv.org/abs/1704.02685 (DeepLIFT, the subsection of shap that is 
-used)
-2. https://arxiv.org/abs/1705.07874 (general shap)
+1. https://arxiv.org/abs/1704.02685 (DeepLIFT, the origins of DeepSHAP.)
+2. https://arxiv.org/abs/1705.07874 (shap paper containing DeepSHAP.)
 
 integrated_grad is implemented by the Integrated-Gradients library and comes 
 from the paper: (Note that installing Integrated-Gradients isn't necessary; I've
