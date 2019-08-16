@@ -109,9 +109,10 @@ shap 0.29.2
 
 ### Acquiring your dataset
 
-I used the Signal Quality Index csv handed to me by Cheng and Tania. I have
-the code to process the csv already in the validation_over_images.py file,
-so if that's what you have, you can just plug and play. 
+I used the Signal Quality Index csv and the 1D_model_and_data handed to me by 
+Cheng and Tania. I have the code to process the csv already in the 
+```validation_over_images.py``` file, so if that's what you have, you can 
+just plug and play. 
 
 If not, then you want to preprocess your dataset/human annotations yourself
 and call the visualize_over_dataset function.
