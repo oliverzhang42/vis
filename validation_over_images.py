@@ -9,20 +9,30 @@ from visualize import *
 
 
 def parse_timestamps(timestamps):
-    timestamp_array = []
+    '''
+    Parses the human annotations from the timestamps
+
+    inputs:
+    timestamps (list): Formatted like in "Signal Quality Index.csv"
+
+    outputs:
+    human_annotations (list): An array of integers between 0 and 7200,
+                              the indices of the human annotations.
+    '''
+    human_annotations = []
 
     for timestamp in timestamps:
         array = []
         timestamp = json.loads(timestamp)
 
         for d in timestamp:
-            array.append(float(d['start']))
-            array.append(float(d['end']))
+            array.append(int(float(d['start']) * 7201 / 30))
+            array.append(int(float(d['end']) * 7201 / 30))
 
         array.sort()
-        timestamp_array.append(array)
+        human_annoatations.append(array)
 
-    return np.array(timestamp_array)
+    return np.array(human_annotations)
 
 
 def parse_csv(path):
@@ -139,10 +149,20 @@ def visualize_wrapper(queue, data, background, neuron, vis_type):
     queue.put(vis)
 
 if __name__ == '__main__':
+    '''
+    vis_type: out of "saliency", "shap", or "integrated_gradients" what type
+              of visualziation would you like?
+    model_path: path to model
+    background: if using "shap" or "integrated_gradients" you need a reference
+                image. Set background to the path of the reference image.
+    neuron: index of neuron in the final layer of model to visualize
+    save_path: where to save everything once you're done.
+    '''
     vis_type = "shap"
     model_path = "resnet_ppg_1d"
     background = "images_1d/half.npy"
     neuron = 0
+    save_path = "history"
 
     print("Visualizing model {} using {} technique!".format(model_path, vis_type))
 
@@ -155,10 +175,11 @@ if __name__ == '__main__':
     for path in paths:
         names.append(path[4:-7])
     
-    timestamps = parse_timestamps(timestamps)
-    noisy_dataset, indices = read_noisy_data(names)
-    timestamps = timestamps[indices]
+    # The human annotations, formatted as a list of indices.
+    human_annotations = parse_timestamps(timestamps)
+    noisy_dataset, noise_indices = read_noisy_data(names)
+    human_annotations = human_annotations[noise_indices]
 
     vis_history = visualize_over_dataset(vis_type, model_path, noisy_dataset, neuron, background)
 
-    np.savez("history", vis_history, noisy_dataset, timestamps)
+    np.savez(save_path, vis_history, noisy_dataset, human_annotations)

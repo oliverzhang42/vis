@@ -98,10 +98,10 @@ def validate_sectional(vis, annotated):
         test_cases.append(0)
 
     for i in range((len(annotated) // 2) - 1):
-        start_noisy = int(annotated[2*i] * 7201 / 30)
-        end_noisy = int(annotated[2*i+1] * 7201 / 30)
+        start_noisy = annotated[2*i]
+        end_noisy = annotated[2*i+1]
         start_clean = end_noisy
-        end_clean = int(annotated[2*i+2] * 7201 / 30)
+        end_clean = annotated[2*i+2]
 
         if start_noisy != end_noisy:
             pred.append(np.max(vis[start_noisy:end_noisy]))
@@ -140,9 +140,6 @@ def validate_interval(vis, annotated):
     for j in range(len(annotated) // 2):
         start = annotated[2*j]
         end = annotated[2*j+1]
-
-        start = int(start * 7201 / 30)
-        end = int(end * 7201 / 30)
 
         for k in range(start, end):
             bad.append(k)

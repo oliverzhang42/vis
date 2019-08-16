@@ -1,3 +1,15 @@
+# Overview
+
+In this library there exist two tools. The first tool is for the visualization
+of convolutional neural networks over a single image. This tool is visualize.py
+and you can either run it as a script (instructions below) or import the specific
+functions within the script. 
+
+The second tool is the validation of conv nets over a whole dataset and it relies
+on the first tool. It itself is partitioned into validation_over_images.py, 
+validation_metrics.py, and congruence.py.
+
+
 ## Visualization Tool For Convolutional Neural Networks
 
 ![alt text](https://github.com/oliverzhang42/vis/blob/master/saliency.png?raw=true)
@@ -92,3 +104,50 @@ keras 2.2.4
 keras-vis 0.4.1
 shap 0.29.2
 ```
+
+## Validation Tool over a Dataset
+
+### Acquiring your dataset
+
+I used the Signal Quality Index csv handed to me by Cheng and Tania. I have
+the code to process the csv already in the validation_over_images.py file,
+so if that's what you have, you can just plug and play. 
+
+If not, then you want to preprocess your dataset/human annotations yourself
+and call the visualize_over_dataset function.
+
+### Validation over images script
+
+Preprocesses the Signal Quality Index csv, but more importantly visualizes
+the model's attention over all images in ```visualize_over_dataset``` function.
+Can be called as a script or imported as a function.
+
+Saves the visualization so that you can either calculate the ROC metrics using
+```validation_metrics.py``` or congruence using ```congruence.py```
+
+### Validation Metrics
+
+Analyzes the dataset visualization using one of three metrics. Pixel classification,
+sectional classification, or interval classification.
+
+Pixel classification attempt to use the model's attention to predict whether the
+specific pixel is within the human annotated region. 
+
+Sectional classification takes the maximum model attention over a section to predict
+whether the section is human annotated as artifact or clean. (Here the sections are
+defined by the human annotations. The regions within the human annotations are 
+artifactual sections, whereas the regions outside the human annotations are clean
+sections.
+
+Interval classification takes the maximum model attention over a fixed interval to
+predict whether the interval has any artifact within it. Currently the function
+is hardcoded to break the 7201 length 1d example into 6 5-second segments of 1200
+datapoints each. If the interval has any overlap with the human annotations, then
+its marked as artifactual. Only if it is completely clean then it is marked as clean.
+
+Notes:
+1. When I write "we use the model's attention to predict ..." this means that the
+model attention is thresholded and those are our predictions.
+2. Sectional classification vs. Interval classification: The regions within 
+Sectional classification is solely determined by the human annotations, whereas the
+intervals in interval classification are fixed at 5 seconds.
