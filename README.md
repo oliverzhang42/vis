@@ -10,9 +10,9 @@ on the first tool. It itself is partitioned into validation_over_images.py,
 validation_metrics.py, and congruence.py.
 
 
-## Visualization Tool For Convolutional Neural Networks
-
 ![alt text](https://github.com/oliverzhang42/vis/blob/master/saliency.png?raw=true)
+
+## Visualization Tool For Convolutional Neural Networks
 
 Above: Highlighted are the pixels which the resnet_ppg model associates with a 
 bad ppg. We use guided saliency as our visualization method.
