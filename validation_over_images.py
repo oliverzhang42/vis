@@ -8,8 +8,6 @@ from vis.utils import utils
 from visualize import *
 
 
-import pudb; pudb.set_trace()
-
 def parse_timestamps(timestamps):
     timestamp_array = []
 

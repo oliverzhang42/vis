@@ -98,16 +98,13 @@ def display_1d(visualization, img, neuron, pred, title, vertical = []):
 
     y = img
 
-    # Afib specific
-    x = np.linspace(0, 30, 7201)
-    x = np.reshape(x, (7201, 1))
-    #x = [[i] for i in range(len(y))]
+    x = [[i] for i in range(len(y))]
 
-    # We have points in a (7201, 1, 2) shape. In general, we have (num points, 1, 2)
+    # We have points in a (num points, 1, 2) shape
     points = np.concatenate((x, y), 1)
     points = np.expand_dims(points, 1)
 
-    # We turn these points into an array of line segments with shape (7200, 2, 2)
+    # We turn these points into an array of line segments with shape (num points - 1, 2, 2)
     # segments[0], for example, might be ([2, 3], [4, 5]) which is the line from (2,3) to (4,5)
     segments = np.concatenate((points[:-1], points[1:]), 1)
 
@@ -121,47 +118,20 @@ def display_1d(visualization, img, neuron, pred, title, vertical = []):
 
     newcmp = matplotlib.colors.ListedColormap(newcolors)
 
-    ''' TODO: Eventually get rid of this hack.
-    print("Change back colormap in display_1d!")
-    
-    seismic = matplotlib.cm.get_cmap('seismic', 256)
-    newcolors = seismic(np.linspace(0, 1, 256))
-    newcolors[120:136, :] = 0.8
-
-    newcmp = matplotlib.colors.ListedColormap(newcolors)
-    #'''
     lc = matplotlib.collections.LineCollection(segments, cmap=newcmp, norm=norm)
 
     # This determines the colorings
     lc.set_array(visualization)
     lc.set_linewidth(2)
 
-    # Afib Specific
-    if neuron == 0:
-        ax.set_title("Probability of bad PPG signal: %.6f" % pred[neuron])
-    else:
-        ax.set_title("Probability of good PPG signal: %.6f" % pred[neuron])
-    #ax.set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
+    ax.set_title("Neuron {} activation: %.6f".format(neuron) % pred[neuron])
 
     heatmap = ax.add_collection(lc)
     ax.set_xlim(np.min(x), np.max(x))
     cbar = f.colorbar(heatmap, ax=ax)
 
-    # Afib specific
-    #plt.ylabel("Arbitrary Scaling of PPG")
-    #plt.xlabel("Time (seconds)")
-    #cbar.set_label("Arbitrary Scaling of Saliency")
-    #cbar.set_label("Shap Values")
-
-    # Afib specific, adding in the anotations
     for x_pos in vertical:
         plt.axvline(x=x_pos, color='black')
-    #plt.axvline(x=6.275, color='black')
-    #plt.axvline(x=7.488, color='black')
-    #plt.axvline(x=27.297, color='black')
-    #plt.axvline(x=28.247, color='black')
-
-
 
 
 def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast=2):
