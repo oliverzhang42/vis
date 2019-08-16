@@ -78,7 +78,7 @@ def visualize_shap(model, img, background, neuron):
     return visualization
 
 
-def display_1d(visualization, img, neuron, pred, title, vertical = []):
+def display_1d(visualization, img, neuron, pred, title, vertical = [], cam = False):
     '''
     Displays a multi-colored line which is actually many uniformly colored
     small line segments.
@@ -114,7 +114,8 @@ def display_1d(visualization, img, neuron, pred, title, vertical = []):
 
     reds = matplotlib.cm.get_cmap('Reds', 256)
     newcolors = reds(np.linspace(0, 1, 256))
-    newcolors[0:25, :] = 0.8 #Set to a very light gray
+    if not cam:
+        newcolors[0:25, :] = 0.8 #Set to a very light gray
 
     newcmp = matplotlib.colors.ListedColormap(newcolors)
 
@@ -206,9 +207,8 @@ def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contras
     f.colorbar(heatmap, ax=ax[2])
 
 
-# TODO: Is name necessary??
 def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
-              background=None, show=False, title=None, clip=2, contrast=2,
+              background=None, show=False, title=None, clip=1, contrast=2,
               neuron=None):
     '''
     Visualizes the predictions of a model on a certain image.
@@ -229,8 +229,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     :param show: (bool) Whether to display the visualization or just save it.
     :param title: (str) Title of the visualization.
     :param clip: (int) Used with "shap" or "integrated_grad". Clip larger gradients
-    to max/clip, so smaller gradients are also displayed.
-    Should be between 1-10.
+    to max/clip, so smaller gradients are also displayed. Should be between 1-10.
     :param contrast: (float) Used with "shap" or "integrated_grad". Determines
     how much should smaller gradients show. (Higher contrast = smaller gradients
     show more.)
@@ -285,7 +284,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
         visualization = np.clip(visualization, 0, np.max(visualization) / clip)
 
     if dim == 1:
-        display_1d(visualization, img, neuron, pred, title)
+        display_1d(visualization, img, neuron, pred, title, cam=(vis=='cam'))
     elif dim == 2:
         display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast)
     else:
@@ -301,7 +300,8 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, help='path of keras model')
-    parser.add_argument('--unprocessed_img', type=str, help='path of raw image.')
+    parser.add_argument('--unprocessed_img', type=str, help='path of raw image.\
+                                                             jpg if 2d, npy if 1d.')
     parser.add_argument('--preprocessed_img', type=str,
                         help='path of image. Must be npy file and preprocessed.')
     parser.add_argument('--vis', type=str, default='cam',
@@ -312,7 +312,7 @@ if __name__ == '__main__':
                         help='path of "background" image')
     parser.add_argument('--show', type=bool, default=False,
                         help='whether to display the image')
-    parser.add_argument('--clip', type=int, default=2,
+    parser.add_argument('--clip', type=int, default=1,
                         help='Used for shap or integrated_grad. '
                              'Sensitvity of display.')
     parser.add_argument('--contrast', type=float, default=2,
@@ -321,8 +321,6 @@ if __name__ == '__main__':
     parser.add_argument('--neuron', type=int, default=None,
                         help='Which neuron to visualize. If blank, will '
                              'visualize the neuron with highest activation')
-    # TODO: Make this a boolean once you figure out booleans
-    # TODO: There seems to be a bug with show always showing.
 
     args = parser.parse_args()
 
@@ -336,11 +334,16 @@ if __name__ == '__main__':
     print("Model detected to have dimension {}".format(dimension))
 
     # Load the image
-
     if dimension == 1:
+        assert args.preprocessed_img[-4:] == '.npy', "preprocessed_img must be a numpy file!"
+        assert args.unprocessed_img[-4:] == '.npy', "unprocessed_img must be a numpy file!"
+
         preprocessed_img = np.load(args.preprocessed_img)
         unprocessed_img = np.load(args.unprocessed_img)
     else:
+        assert args.preprocessed_img[-4:] == '.npy', "preprocessed_img must be a numpy file!"
+        assert args.unprocessed_img[-4:] == '.jpg', "unprocessed_img must be a jpg file!"
+
         preprocessed_img = np.load(args.preprocessed_img)
         unprocessed_img = utils.load_img(args.unprocessed_img)
 
