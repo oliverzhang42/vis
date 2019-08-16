@@ -25,7 +25,7 @@ def rgb2gray(rgb):
     return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
 
 
-def visualize_integrated_gradients(model, img, background, clip, neuron):
+def visualize_integrated_gradients(model, img, background, neuron):
     # Define a function, given an input and a class index
     # It returns the predictions of your model and the gradients.
     # Such a function is required for the integrated_gradients framework.
@@ -49,15 +49,6 @@ def visualize_integrated_gradients(model, img, background, clip, neuron):
 
     visualization = attributions[0]
 
-    # Clip shap_values between 0 and max/clip
-    # Prevents outliers from overshadowing the importances of all other pixels.
-    # The higher the clip, the more pixels are at the upper bound, the
-    # more lit up the image seems.
-    
-    # TODO: maybe re add this?
-    # visualization = np.clip(visualization, 0, np.max(visualization) / 1)
-    visualization = np.abs(visualization)
-
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
     visualization = np.max(visualization, -1)
@@ -65,7 +56,7 @@ def visualize_integrated_gradients(model, img, background, clip, neuron):
     return visualization
 
 
-def visualize_shap(model, img, background, clip, neuron):
+def visualize_shap(model, img, background, neuron):
     batch = np.array([img])
     background = np.array([background])
 
@@ -76,17 +67,6 @@ def visualize_shap(model, img, background, clip, neuron):
     # Convert all shap_values to 'float32'
     for i in range(len(shap_values)):
         shap_values[i] = shap_values[i][0].astype('float32')
-
-    # Clip shap_values between 0 and max/clip
-    # Prevents outliers from overshadowing the importances of all other pixels.
-    # The higher the clip, the more pixels are at the upper bound, the
-    # more lit up the image seems.
-
-    #print("Instead of clipping, right now I'm just taking the abs value!")
-    
-    # TODO: maybe re add this?
-    #shap_values = np.abs(shap_values)
-    shap_values = np.clip(shap_values, 0, np.max(shap_values) / 1)
 
     # Reduce the number of channels of the image. (224, 224, 3) => (224, 224)
     # This is because a 3D importance map is hard to interpret compared to a 2D one.
@@ -141,6 +121,15 @@ def display_1d(visualization, img, neuron, pred, title, vertical = []):
 
     newcmp = matplotlib.colors.ListedColormap(newcolors)
 
+    ''' TODO: Eventually get rid of this hack.
+    print("Change back colormap in display_1d!")
+    
+    seismic = matplotlib.cm.get_cmap('seismic', 256)
+    newcolors = seismic(np.linspace(0, 1, 256))
+    newcolors[120:136, :] = 0.8
+
+    newcmp = matplotlib.colors.ListedColormap(newcolors)
+    #'''
     lc = matplotlib.collections.LineCollection(segments, cmap=newcmp, norm=norm)
 
     # This determines the colorings
@@ -314,17 +303,16 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     elif vis == 'shap':
         assert background is not None, "Shap requires a background image."
 
-        visualization = visualize_shap(model, img, background,
-                                       clip, neuron)
+        visualization = visualize_shap(model, img, background, neuron)
+        visualization = np.abs(visualization)
+        visualizatoin = np.clip(visualization, 0, np.max(visualization) / clip)
 
     elif vis == 'integrated_grad':
         assert background is not None, "Integrated Gradients requires a background"
 
-        visualization = visualize_integrated_gradients(model, img, background,
-                                                       clip, neuron)
-
-    plt.hist(visualization.flatten(), 50)
-    plt.show()
+        visualization = visualize_integrated_gradients(model, img, background, neuron)
+        visualization = np.abs(visualization)
+        visualization = np.clip(visualization, 0, np.max(visualization) / clip)
 
     if dim == 1:
         display_1d(visualization, img, neuron, pred, title)
