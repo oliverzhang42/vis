@@ -143,9 +143,11 @@ def visualize_wrapper(queue, data, background, neuron, vis_type):
                                  filter_indices=neuron, seed_input=data)
     elif vis_type == 'shap':
         vis = visualize_shap(m, data, background, neuron)
-    else:
+    elif vis_type == 'integrated_gradients':
         vis = visualize_integrated_gradients(m, data, background, neuron)
-    
+    else:
+        raise Exception("vis_type needs to be saliency, shap, or integrated_gradients")
+
     queue.put(vis)
 
 if __name__ == '__main__':
@@ -158,7 +160,7 @@ if __name__ == '__main__':
     neuron: index of neuron in the final layer of model to visualize
     save_path: where to save everything once you're done.
     '''
-    vis_type = "shap"
+    vis_type = "integrated_gradients"
     model_path = "resnet_ppg_1d"
     background = "images_1d/half.npy"
     neuron = 0
