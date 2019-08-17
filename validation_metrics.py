@@ -27,7 +27,7 @@ def preprocess(vis_history, abs_=False):
         vis_history_min = vis_history.min(1)
         normalizer = 2 * np.maximum(vis_history_max, np.abs(vis_history_min))
  
-        preprocessed = vis_history / normalizer[:. np.newaxis]
+        preprocessed = vis_history / normalizer[:, np.newaxis]
         preprocessed = preprocessed + 0.5
         return preprocessed
 
@@ -58,7 +58,7 @@ def validate_pixel(vis, annotated):
                       attention. 1 means human annotated pixel, 0 means
                       not human annotated pixel.
     '''
-    pred = vis.flatten()
+    pred = vis.flatten().tolist()
     test_cases = []
 
     for i in range(annotated[0]):
@@ -70,6 +70,12 @@ def validate_pixel(vis, annotated):
 
         for j in range(annotated[2*i+1], annotated[2*i+2]):
             test_cases.append(0)
+
+    for i in range(annotated[-2], annotated[-1]):
+        test_cases.append(1)
+
+    for i in range(annotated[-1], 7201):
+        test_cases.append(0)
 
     return pred, test_cases
 
@@ -110,7 +116,15 @@ def validate_sectional(vis, annotated):
         if start_clean != end_clean:
             pred.append(np.max(vis[start_clean:end_clean]))
             test_cases.append(0)
-        
+
+    if annotated[-2] != annotated[-1]:
+        pred.append(np.max(vis[annotated[-2]:annotated[-1]]))
+        test_cases.append(1)
+
+    if not annotated[-1] >= 7200:
+        pred.append(np.max(vis[annotated[-1]:7201]))
+        test_cases.append(0)
+
     return pred, test_cases
 
 
@@ -135,6 +149,7 @@ def validate_interval(vis, annotated):
     sections = 7201 // interval_size
 
     pred = []
+    test_cases = []
     bad = []
 
     for j in range(len(annotated) // 2):
@@ -148,7 +163,7 @@ def validate_interval(vis, annotated):
         start = interval_size*j
         end = interval_size*(j+1)
 
-        pred.append(np.max(img[start:end]))
+        pred.append(np.max(vis[start:end]))
 
         # 0 denotes a good section, 1 denotes a noisy section
         section_quality = 0
@@ -187,9 +202,12 @@ def validate_dataset(vis_history, annotations, val_type):
             pred_example, test_case = validate_pixel(vis_example, annotated)
         elif val_type == 'sectional':
             pred_example, test_case = validate_sectional(vis_example, annotated)
-        else:
+        elif val_type == 'interval':
             pred_example, test_case = validate_interval(vis_example, annotated)
+        else:
+            raise Exception("val_type must be 'pixel', 'sectional', or 'interval!'")
 
+        # Note: this is concatenation.
         pred = pred + pred_example
         test_cases = test_cases + test_case
 
@@ -197,15 +215,15 @@ def validate_dataset(vis_history, annotations, val_type):
 
 
 if __name__ == '__main__':
-    history_path = 'shap_default_history/history.npz'
-    absolute_values = True
-    val_type = 'pixel'
+    history_path = 'shap/history.npz'
+    absolute_values = False
+    val_type = 'sectional'
 
     history = np.load(history_path, allow_pickle=True)
 
     vis_history = history.get("arr_0")
     img_history = history.get("arr_1")
-    annotations_history = history.get("arr_2")
+    annotations = history.get("arr_2")
     
     vis_history = preprocess(vis_history, abs_=absolute_values)
 

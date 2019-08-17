@@ -30,7 +30,7 @@ def parse_timestamps(timestamps):
             array.append(int(float(d['end']) * 7201 / 30))
 
         array.sort()
-        human_annoatations.append(array)
+        human_annotations.append(array)
 
     return np.array(human_annotations)
 
@@ -162,7 +162,6 @@ if __name__ == '__main__':
     model_path = "resnet_ppg_1d"
     background = "images_1d/half.npy"
     neuron = 0
-    save_path = "history"
 
     print("Visualizing model {} using {} technique!".format(model_path, vis_type))
 
@@ -181,5 +180,10 @@ if __name__ == '__main__':
     human_annotations = human_annotations[noise_indices]
 
     vis_history = visualize_over_dataset(vis_type, model_path, noisy_dataset, neuron, background)
+    
+    if not os.path.isdir(vis_type):
+        print("Creating Directory {}".format(vis_type))
+        os.mkdir(vis_type)
 
+    save_path = os.path.join(vis_type, "history")
     np.savez(save_path, vis_history, noisy_dataset, human_annotations)

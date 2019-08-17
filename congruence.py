@@ -1,49 +1,50 @@
-# This is for computing congruence with both positive and negative gradients
-# Congruence with only positive gradients is congruence.py
-
 import numpy as np
+from validation_metrics import preprocess
 
-history = np.load("saliency_history/history.npz", allow_pickle=True)
+def congruence(vis_history, annotations):
+    '''
+    Calculates the congruence of the human
+    annotations and the model annotations.
 
-vis_history = history.get("arr_0")
-proportion_right_history = history.get("arr_1")
-pred_history = history.get("arr_2")
-vbar_history = history.get("arr_3")
-img_history = history.get("arr_4")
+    inputs:
+    vis_history (list): The total model attention.
+    annotations (list): The human annotations.
 
-total_correctness = []
-images = len(vis_history)
+    outputs:
+    avg_congruence (int): The average congruence per image
+                      between human and model annotations.
+    '''
 
-total_area_marked = 0
+    cong_per_img = []
 
-for i in range(images):
-    item = vis_history[i]
-    total_grad = np.sum(np.abs(item))
-    correct_grad = 0
+    for i in range(len(vis_history)):
+        vis = vis_history[i]
+        anno = annotations[i]
+        
+        correct_attention = 0
+        total_attention = np.sum(vis)
 
-    vbar = vbar_history[i]
+        for j in range(len(anno)//2):
+            start = anno[2*j]
+            end = anno[2*j+1]
 
-    former = 0
+            correct_attention += np.sum(vis[start:end])
 
-    for j in range(len(vbar)//2):
-        if left != former:
-            correct_grad -= np.sum(item[former:left])
+        cong_per_img.append(correct_attention / total_attention)
 
-        left = vbar[2*j]
-        right = vbar[2*j+1]
+    return np.mean(cong_per_img)
 
-        left = int(7201 * left / 30)
-        right = int(7201 * right / 30)
 
-        correct_grad += np.sum(item[left:right])
-        total_area_marked += (right - left)/7201
+if __name__ == '__main__':
+    history_path = 'shap/history.npz'
+    absolute_values = False
+    history = np.load(history_path, allow_pickle=True)
 
-        former = left
+    vis_history = history.get("arr_0")
+    annotations = history.get("arr_2")
 
-    if right != 7201:
-        correct_grad -= np.sum(item[right:])
+    vis_history = preprocess(vis_history, abs_=absolute_values)
+    cong = congruence(vis_history, annotations)
 
-    total_correctness.append(correct_grad / total_grad)
+    print("Congruence is: {}".format(cong))
 
-print(total_correctness / images)
-print(total_area_marked / images)

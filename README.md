@@ -7,7 +7,8 @@ functions within the script.
 
 The second tool is the validation of conv nets over a whole dataset and it relies
 on the first tool. It itself is partitioned into validation_over_images.py, 
-validation_metrics.py, and congruence.py.
+validation_metrics.py, and congruence.py. To display your results, you can run 
+display_validation.py.
 
 
 ![alt text](https://github.com/oliverzhang42/vis/blob/master/saliency.png?raw=true)
