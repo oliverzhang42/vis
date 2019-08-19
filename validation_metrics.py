@@ -7,11 +7,27 @@ from visualize import display_1d
 mpl.rcParams['figure.figsize'] = [6.0, 6.0]
 
 
+def get_null(vis_history):
+    '''
+    Returns index array of all visualizations whose only value is zero.
+    '''
+    indices = []
+
+    max_ = vis_history.max(1)
+    min_ = vis_history.min(1)
+
+    for i in range(len(vis_history)):
+        if max_[i] == 0 and min_[i] == 0:
+            indices.append(i)
+
+    return indices
+
+
 def preprocess(vis_history, abs_=False):
     '''
     Preprocesses vis_history. If doing absolute preprocessing then takes
     the absolute values and normalizes them to between 0 and 1 by dividing
-    by maximum
+    by maximum.
 
     If doing regular preprocessing them to between 0 and 1 such that what
     once was a 0 is now a 0.5. In detail, the procedure is to scale the data
@@ -215,9 +231,10 @@ def validate_dataset(vis_history, annotations, val_type):
 
 
 if __name__ == '__main__':
-    history_path = 'shap/history.npz'
-    absolute_values = False
-    val_type = 'sectional'
+    import pudb; pudb.set_trace()
+    history_path = 'saliency/history.npz'
+    absolute_values = True
+    val_type = 'interval'
 
     history = np.load(history_path, allow_pickle=True)
 
@@ -225,6 +242,20 @@ if __name__ == '__main__':
     img_history = history.get("arr_1")
     annotations = history.get("arr_2")
     
+    null_indices = get_null(vis_history)
+
+    if null_indices != []:
+        print("Removing {} examples for being all zero".format(len(null_indices)))
+        indices = []
+
+        for i in range(len(vis_history)):
+            if i not in null_indices:
+                indices.append(i)
+
+        vis_history = vis_history[indices]
+        img_history = img_history[indices]
+        annotations = annotations[indices]
+
     vis_history = preprocess(vis_history, abs_=absolute_values)
 
     pred, test_cases = validate_dataset(vis_history, annotations, val_type)

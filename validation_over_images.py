@@ -160,7 +160,7 @@ if __name__ == '__main__':
     neuron: index of neuron in the final layer of model to visualize
     save_path: where to save everything once you're done.
     '''
-    vis_type = "integrated_gradients"
+    vis_type = "saliency"
     model_path = "resnet_ppg_1d"
     background = "images_1d/half.npy"
     neuron = 0
