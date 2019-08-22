@@ -135,7 +135,7 @@ def display_1d(visualization, img, neuron, pred, title, vertical = [], cam = Fal
         plt.axvline(x=x_pos, color='black')
 
 
-def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast=2):
+def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, annotations=None, contrast=2):
     '''
     First grayscales and fades the unprocessed_img
     Second converts "visualization" into a displayable image. Overlays \
@@ -179,8 +179,7 @@ def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contras
         newcolors[0, :] = 1
         newcolors = newcolors ** contrast
 
-        newcmp = matplotlib.colors.ListedColormap(newcolors)
-
+        newcmp = matplotlib.colors.ListedColormap(newcolors) 
         colored_heatmap = np.uint8(newcmp(normalized)[..., :3] * 255)
 
     # Cam even has its own overlay technique.
@@ -206,6 +205,14 @@ def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contras
     ax[2].imshow(overlaid)
     f.colorbar(heatmap, ax=ax[2])
 
+    if not annotations is None:
+        for x_pos in annotations:
+            if x_pos == 224:
+                x_pos = 223
+            ax[0].axvline(x=x_pos, color='black')
+            ax[1].axvline(x=x_pos, color='black')
+            ax[2].axvline(x=x_pos, color='black')
+
 
 def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
               background=None, show=False, title=None, clip=1, contrast=2,
@@ -218,19 +225,19 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     be preprocessed.
     :param unprocessed_img: (numpy array) img but unprocessed. Values either
     ints from 0-255 or floats from 0-1. Will be displayed.
-    :param vis: (str) Either "cam", "saliency", "shap" or "integrated_grad".
+    :param vis: (str) Either "cam", "saliency", "shap" or "integrated_gradients".
     The visualization technique
     :param name: (str) The name to save the visualization under
     :param conv_layer: (int) Required if using CAM; the last convolutional
     layer of the model
     :param background: (numpy array) Must be preprocesesd. The "background"
-    image for shap or integrated_grad.
+    image for shap or integrated_gradients.
     See README for more details.
     :param show: (bool) Whether to display the visualization or just save it.
     :param title: (str) Title of the visualization.
-    :param clip: (int) Used with "shap" or "integrated_grad". Clip larger gradients
+    :param clip: (int) Used with "shap" or "integrated_gradients". Clip larger gradients
     to max/clip, so smaller gradients are also displayed. Should be between 1-10.
-    :param contrast: (float) Used with "shap" or "integrated_grad". Determines
+    :param contrast: (float) Used with "shap" or "integrated_gradients". Determines
     how much should smaller gradients show. (Higher contrast = smaller gradients
     show more.)
     :param neuron: (int) Which neuron to display. If unset, will display the
@@ -276,7 +283,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
         visualization = np.abs(visualization)
         visualizatoin = np.clip(visualization, 0, np.max(visualization) / clip)
 
-    elif vis == 'integrated_grad':
+    elif vis == 'integrated_gradients':
         assert background is not None, "Integrated Gradients requires a background"
 
         visualization = visualize_integrated_gradients(model, img, background, neuron)
@@ -286,7 +293,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
     if dim == 1:
         display_1d(visualization, img, neuron, pred, title, cam=(vis=='cam'))
     elif dim == 2:
-        display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast)
+        display_2d(visualization, unprocessed_img, neuron, pred, title, vis, contrast=contrast)
     else:
         raise Exception("Cannot display a model which isn't 1D or 2D!")
 
@@ -298,14 +305,14 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='Process some arguments.')
     parser.add_argument('--model', type=str, help='path of keras model')
     parser.add_argument('--unprocessed_img', type=str, help='path of raw image.\
                                                              jpg if 2d, npy if 1d.')
     parser.add_argument('--preprocessed_img', type=str,
                         help='path of image. Must be npy file and preprocessed.')
     parser.add_argument('--vis', type=str, default='cam',
-                        help='either cam, shap, integrated_grad, or saliency')
+                        help='either cam, shap, integrated_gradients, or saliency')
     parser.add_argument('--conv_layer', type=int, default=None,
                         help='Used for CAM. Index of last convolutional layer')
     parser.add_argument('--background', type=str,
@@ -313,10 +320,10 @@ if __name__ == '__main__':
     parser.add_argument('--show', type=bool, default=False,
                         help='whether to display the image')
     parser.add_argument('--clip', type=int, default=1,
-                        help='Used for shap or integrated_grad. '
+                        help='Used for shap or integrated_gradients. '
                              'Sensitvity of display.')
     parser.add_argument('--contrast', type=float, default=2,
-                        help='Used for shap or integrated_grad. '
+                        help='Used for shap or integrated_gradients. '
                              'How much smaller gradients are emphasized.')
     parser.add_argument('--neuron', type=int, default=None,
                         help='Which neuron to visualize. If blank, will '
@@ -324,8 +331,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    assert args.vis in ['cam', 'saliency', 'shap', 'integrated_grad'], \
-        "vis must be cam, shap, integrated_grad or saliency!"
+    assert args.vis in ['cam', 'saliency', 'shap', 'integrated_gradients'], \
+        "vis must be cam, shap, integrated_gradients or saliency!"
 
     # Load the model
     model = load_model(args.model)

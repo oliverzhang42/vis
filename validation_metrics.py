@@ -1,8 +1,9 @@
+import argparse
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from sklearn import metrics
-from visualize import display_1d
+from visualize import display_1d, display_2d
 
 mpl.rcParams['figure.figsize'] = [6.0, 6.0]
 
@@ -36,6 +37,7 @@ def preprocess(vis_history, abs_=False):
 
     if abs_:
         preprocessed = np.abs(vis_history)
+        preprocessed = preprocessed - preprocessed.min(1)[:, np.newaxis]
         preprocessed = preprocessed / preprocessed.max(1)[:, np.newaxis]
         return preprocessed
     else:
@@ -90,7 +92,7 @@ def validate_pixel(vis, annotated):
     for i in range(annotated[-2], annotated[-1]):
         test_cases.append(1)
 
-    for i in range(annotated[-1], 7201):
+    for i in range(annotated[-1], len(vis)):
         test_cases.append(0)
 
     return pred, test_cases
@@ -132,13 +134,13 @@ def validate_sectional(vis, annotated):
         if start_clean != end_clean:
             pred.append(np.max(vis[start_clean:end_clean]))
             test_cases.append(0)
-
+    
     if annotated[-2] != annotated[-1]:
         pred.append(np.max(vis[annotated[-2]:annotated[-1]]))
         test_cases.append(1)
-
-    if not annotated[-1] >= 7200:
-        pred.append(np.max(vis[annotated[-1]:7201]))
+    
+    if not annotated[-1] >= len(vis):
+        pred.append(np.max(vis[annotated[-1]:]))
         test_cases.append(0)
 
     return pred, test_cases
@@ -147,7 +149,7 @@ def validate_sectional(vis, annotated):
 def validate_interval(vis, annotated):
     '''
     Function which applies interval validation on a single example.
-    Note: Currently the interval size is hardcoded.
+    Note: Currently the number of intervals is hardcoded.
 
     inputs:
     vis (np.array): the visualization of a single training example.
@@ -161,8 +163,8 @@ def validate_interval(vis, annotated):
                        not human annotated interval.
     '''
 
-    interval_size = 1200
-    sections = 7201 // interval_size
+    intervals = 6
+    interval_size = len(vis) // intervals
 
     pred = []
     test_cases = []
@@ -175,7 +177,7 @@ def validate_interval(vis, annotated):
         for k in range(start, end):
             bad.append(k)
 
-    for j in range(sections):
+    for j in range(intervals):
         start = interval_size*j
         end = interval_size*(j+1)
 
@@ -231,16 +233,27 @@ def validate_dataset(vis_history, annotations, val_type):
 
 
 if __name__ == '__main__':
-    import pudb; pudb.set_trace()
-    history_path = 'saliency/history.npz'
-    absolute_values = True
-    val_type = 'interval'
+    parser = argparse.ArgumentParser(description='Process some arguments.')
+    parser.add_argument('--path', type=str, required=True,
+                        help='path of history npz.')
+    parser.add_argument('--abs', type=bool, default=False,
+                        help='whether to use the absolute preprocessing.')
+    parser.add_argument('--val', type=str, default='sectional', 
+                        help='Validation type. Can be sectional, pixel, or interval.')
 
-    history = np.load(history_path, allow_pickle=True)
+    args = parser.parse_args()
+
+    history = np.load(args.path, allow_pickle=True)
 
     vis_history = history.get("arr_0")
-    img_history = history.get("arr_1")
+    img_history = history.get("arr_1").astype('float32')
     annotations = history.get("arr_2")
+
+    # If dimension is 2, we reduce the 224 x 224 visualization 
+    # to a 224 one by taking the maximum over the columns.
+    if len(vis_history.shape) == 3:
+        print("Detected 2d images, taking max over columns!")
+        vis_history = vis_history.max(1)
     
     null_indices = get_null(vis_history)
 
@@ -256,9 +269,8 @@ if __name__ == '__main__':
         img_history = img_history[indices]
         annotations = annotations[indices]
 
-    vis_history = preprocess(vis_history, abs_=absolute_values)
-
-    pred, test_cases = validate_dataset(vis_history, annotations, val_type)
+    vis_history = preprocess(vis_history, abs_=args.abs)
+    pred, test_cases = validate_dataset(vis_history, annotations, args.val)
 
     create_roc(pred, test_cases)
     plt.show()

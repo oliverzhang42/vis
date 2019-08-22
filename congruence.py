@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 from validation_metrics import get_null, preprocess
 
@@ -36,12 +37,20 @@ def congruence(vis_history, annotations):
 
 
 if __name__ == '__main__':
-    history_path = 'saliency/history.npz'
-    absolute_values = True
-    history = np.load(history_path, allow_pickle=True)
+    parser = argparse.ArgumentParser(description='Process some arguments.')
+    parser.add_argument('--path', type=str, required=True, help='path of history npz.')
+    parser.add_argument('--abs', type=bool, default=False,
+                        help='whether to use the absolute preprocessing.')
+    args = parser.parse_args()
+    
+    history = np.load(args.path, allow_pickle=True)
 
     vis_history = history.get("arr_0")
     annotations = history.get("arr_2")
+
+    if len(vis_history.shape) == 3:
+        print("2d model detected; taking sum over columns to condense image.")
+        vis_history = vis_history.sum(1)
 
     null_indices = get_null(vis_history)
     if null_indices != []:
@@ -55,7 +64,7 @@ if __name__ == '__main__':
         vis_history = vis_history[indices]
         annotations = annotations[indices]
 
-    vis_history = preprocess(vis_history, abs_=absolute_values)
+    vis_history = preprocess(vis_history, abs_=args.abs)
     cong = congruence(vis_history, annotations)
 
     print("Congruence is: {}".format(cong))
