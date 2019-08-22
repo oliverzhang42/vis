@@ -55,12 +55,10 @@ layer is GlobalAveragPooling. This is the case for ResNet (1D and 2D) but not VG
 
 ```--background``` only is necessary for shap or integrated_grad. Basically, 
 these methods require a base image to compare against. This 'base image' should 
-be an image which the model is uncertain about. (For resnet_ppg, a white image 
-is a bad background because the model is confident that the PPG is bad.) Also 
-note that the background image must be preprocessed like all other images. For the
-1d model, I recommend "images_1d/half.npy", a (7201, 1) npy array with all values=0.5.
-For the 2d model, I recommend "images_2d/background_preprocessed.npy", a datapoint
-which the model was unsure on.
+be an image which the model is uncertain about. (For resnet_ppg, you can have a 
+white background, but be sure to preprocess it first. Furthermore, for resnet_ppg_1d,
+a flatlined data would be at 0.5, so the background should be a flatline of 0.5.
+These images are at images_2d/background.npy and images_1d/half.npy respectively.
 
 ```--contrast``` works by modifying the colormap when displaying gradients. This
  means that when contrast isn't one, the colormap isn't a linear mapping.
