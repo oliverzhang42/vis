@@ -231,8 +231,6 @@ if __name__ == '__main__':
 
     print("Visualizing model {} using {} technique!".format(args.model, args.vis))
 
-    import pudb; pudb.set_trace()
-
     df = pd.read_csv("Signal Quality Index.csv")
     paths = df.FilePath.tolist()
     timestamps = df.Value.tolist()
