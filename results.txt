@@ -1,0 +1,4 @@
+cheng_models/learningrate0.05_dropout0.4_optRMSprop/1dresnet_weights.10-0.84.hdf5 congruence: 0.7074654031624101 sectional: 0.8081075777714966 interval: 0.8408028479676578 pixel: 0.855402709971346 
+cheng_models/learningrate0.05_dropout0.2_optSGD/1dresnet_weights.10-0.99.hdf5 congruence: 0.6786246043792038 sectional: 0.8149393747912194 interval: 0.8390701344311118 pixel: 0.6740570172669388 
+cheng_models/learningrate0.3_dropout0_optSGD/1dresnet_weights.10-0.86.hdf5 congruence: 0.41380101535228714 sectional: 0.5870314262954908 interval: 0.5216074751778464 pixel: 0.41725649311546165 
+cheng_models/learningrate0.1_dropout0.2_optRMSprop/1dresnet_weights.10-0.98.hdf5 congruence: 0.5840696466285489 sectional: 0.832114716607371 interval: 0.8753309661434393 pixel: 0.7957788423112132 

@@ -50,16 +50,18 @@ def preprocess(vis_history, abs_=False):
         return preprocessed
 
 
-def create_roc(pred, test_cases):
+def create_roc(pred, test_cases, plot=True):
     '''
     Helper function to create and plot the roc curve.
     '''
     
     fpr, tpr, _ = metrics.roc_curve(test_cases,  pred)
     auc = metrics.roc_auc_score(test_cases, pred)
-    plt.plot(fpr,tpr,label="data 1, auc="+str(auc))
-    plt.legend(loc=4)
-
+    if plot:
+        plt.plot(fpr,tpr,label="data 1, auc="+str(auc))
+        plt.legend(loc=4)
+    else:
+        print("AuC is: {}".format(str(auc)))
 
 def validate_pixel(vis, annotated):
     '''
@@ -240,6 +242,8 @@ if __name__ == '__main__':
                         help='whether to use the absolute preprocessing.')
     parser.add_argument('--val', type=str, default='sectional', 
                         help='Validation type. Can be sectional, pixel, or interval.')
+    parser.add_argument('--show', type=bool, default=False,
+                        help='Whether to show the ROC curve or just print the AuC.')
 
     args = parser.parse_args()
 
@@ -272,6 +276,7 @@ if __name__ == '__main__':
     vis_history = preprocess(vis_history, abs_=args.abs)
     pred, test_cases = validate_dataset(vis_history, annotations, args.val)
 
-    create_roc(pred, test_cases)
-    plt.show()
-
+    create_roc(pred, test_cases, plot=args.show)
+    if args.show:
+        plt.show()
+        

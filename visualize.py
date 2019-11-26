@@ -281,7 +281,7 @@ def visualize(model, img, unprocessed_img, vis, name, conv_layer=None,
 
         visualization = visualize_shap(model, img, background, neuron)
         visualization = np.abs(visualization)
-        visualizatoin = np.clip(visualization, 0, np.max(visualization) / clip)
+        visualization = np.clip(visualization, 0, np.max(visualization) / clip)
 
     elif vis == 'integrated_gradients':
         assert background is not None, "Integrated Gradients requires a background"

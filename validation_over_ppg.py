@@ -1,4 +1,5 @@
 import argparse
+from keras import activations
 import json
 import matplotlib
 from multiprocessing import Process, Queue
@@ -175,6 +176,10 @@ def visualize_wrapper(queue, model_path, data, background, neuron, vis_type):
 
     import keras
     m = keras.models.load_model(model_path)
+
+    # Swap softmax with linear. Makes gradients more visible
+    m.layers[-1].activation = activations.linear
+    m = utils.apply_modifications(m)
 
     if vis_type == 'saliency':    
         vis = visualize_saliency(m, -1, backprop_modifier='guided', 
