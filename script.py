@@ -8,7 +8,6 @@
 
 import os
 import shutil
-import pudb
 
 folder = "cheng_models"
 
@@ -20,8 +19,6 @@ for r, d, f in os.walk(folder):
             files.append(os.path.join(r, file))
 
 f = open("results.txt", "w")
-
-import pudb; pudb.set_trace()
 
 for m_path in files:
     if m_path[-12:-10] != '10':
