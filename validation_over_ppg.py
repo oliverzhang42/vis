@@ -1,8 +1,8 @@
 import argparse
+import keras
 from keras import activations
 import json
 import matplotlib
-from multiprocessing import Process, Queue
 import numpy as np
 import os
 import pandas as pd
@@ -125,8 +125,6 @@ def read_noisy_data(data_names, folder_name, dimension, mean_image_path=None):
 def visualize_over_dataset(vis_type, model_path, dataset, neuron, ref=None):
     '''
     Make local visualizations over the whole dataset.
-    Note: The program opens a new process everytime it calls tensorflow. Otherwise
-    there is a memory leak. 
 
     inputs:
     vis_type (str): 'saliency', 'integrated_gradients', or 'shap'. Which type of vis
@@ -149,49 +147,30 @@ def visualize_over_dataset(vis_type, model_path, dataset, neuron, ref=None):
         background = np.load(ref)
     else:
         background = None
+     
+    model = keras.models.load_model(model_path)
+    
+    if vis_type == 'shap':
+        explainer = shap.DeepExplainer(model, np.array([background]))
+    elif vis_type == 'integrated_gradients':
+        # TODO: Fix all the integrated_gradients stuff.
+        pass
 
     for i in range(len(dataset)):
         data = dataset[i]
-        queue = Queue()
-        p = Process(target=visualize_wrapper, args=(queue, model_path, data, background, neuron, vis_type))
-        p.start()
-        visualization = queue.get()
-        p.join()
-        del p
+        if vis_type == 'saliency':
+            vis = visualize_saliency(model, -1, backprop_modifier='guided',
+                                 filter_indices=neuron, seed_input=data)
+        elif vis_type == 'shap':
+            vis = visualize_shap(model, data, background, neuron, explainer=explainer)
+        elif vis_type == 'integrated_gradients':
+            vis = visualize_integrated_gradients(model, data, background, neuron)
 
         print("Processed datapoint number {}".format(i))
 
-        vis_history.append(visualization)
+        vis_history.append(vis)
 
     return np.array(vis_history)
-
-
-def visualize_wrapper(queue, model_path, data, background, neuron, vis_type):
-    '''
-    Helper function for visualize_over_dataset. Because its only the child process
-    which calls tensorflow and not the parent process, the memory of tensorflow is
-    released every time. Unfortunately, it also means we have to load the model
-    every time, but oh well.
-    '''
-
-    import keras
-    m = keras.models.load_model(model_path)
-
-    # Swap softmax with linear. Makes gradients more visible
-    m.layers[-1].activation = activations.linear
-    m = utils.apply_modifications(m)
-
-    if vis_type == 'saliency':    
-        vis = visualize_saliency(m, -1, backprop_modifier='guided', 
-                                 filter_indices=neuron, seed_input=data)
-    elif vis_type == 'shap':
-        vis = visualize_shap(m, data, background, neuron)
-    elif vis_type == 'integrated_gradients':
-        vis = visualize_integrated_gradients(m, data, background, neuron)
-    else:
-        raise Exception("vis_type needs to be saliency, shap, or integrated_gradients")
-
-    queue.put(vis)
 
 
 if __name__ == '__main__':

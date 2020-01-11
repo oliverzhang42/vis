@@ -56,13 +56,14 @@ def visualize_integrated_gradients(model, img, background, neuron):
     return visualization
 
 
-def visualize_shap(model, img, background, neuron):
+def visualize_shap(model, img, background, neuron, explainer=None):
     batch = np.array([img])
     background = np.array([background])
 
     # explain predictions of the model on four images
-    e = shap.DeepExplainer(model, background)
-    shap_values = e.shap_values(batch)
+    if explainer is None:
+        explainer = shap.DeepExplainer(model, background)
+    shap_values = explainer.shap_values(batch)
 
     # Convert all shap_values to 'float32'
     for i in range(len(shap_values)):
