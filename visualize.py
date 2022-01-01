@@ -171,7 +171,7 @@ def display_2d(visualization, unprocessed_img, neuron, pred, title, vis, annotat
     # Lets overlay the heatmap onto original image. CAM has its own colormap,
     # All other techniques use a modified red colormap
     if vis == 'cam':
-        colored_heatmap = np.uint8(matplotlib.cm.jet(normalized)[..., :3] * 255)
+        colored_heatmap = np.uint8(normalized * 255)
     else:
         # Custom colormap to increase the visibility of the gradients
 
